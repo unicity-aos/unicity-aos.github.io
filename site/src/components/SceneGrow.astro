@@ -17,7 +17,7 @@ const steps = [
     <ol class="grow-steps">
       {
         steps.map((s) => (
-          <li class="card grow-step" data-step>
+          <li class="card grow-step" data-step data-dock={s.title.toLowerCase()}>
             <p class="mono grow-n">{s.n}</p>
             <h3>{s.title}</h3>
             <p class="dim">{s.body}</p>
@@ -55,33 +55,32 @@ const steps = [
     max-width: 16ch;
   }
 
+  /* stations along the spine: each step docks onto the rail in sequence */
   .grow-steps {
     list-style: none;
     padding: 0;
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: var(--s-2);
+    gap: var(--s-4);
+    max-width: 34rem;
     margin-bottom: var(--s-6);
-  }
-
-  @media (max-width: 1080px) {
-    .grow-steps {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
-
-  @media (max-width: 620px) {
-    .grow-steps {
-      grid-template-columns: 1fr;
-    }
   }
 
   .grow-step {
     padding: var(--s-3);
     display: grid;
-    gap: var(--s-1);
-    align-content: start;
+    grid-template-columns: auto 1fr;
+    column-gap: var(--s-3);
+    align-items: baseline;
     transition: border-color var(--t-med) var(--ease-out);
+  }
+
+  .grow-step h3 {
+    grid-column: 2;
+  }
+
+  .grow-step .dim {
+    grid-column: 2;
+    margin-top: var(--s-1);
   }
 
   .grow-step:hover {

@@ -30,10 +30,12 @@ const { title, description } = Astro.props;
     <meta name="theme-color" content="#07080D" />
   </head>
   <body>
+    <astrid-rail aria-hidden="true"></astrid-rail>
     <Hud />
     <slot />
     <script>
       import { bootKernel } from '../scripts/kernel';
+      import '../scripts/rail';
       // Boot the real kernel after first paint; the HUD flips when it lands.
       requestAnimationFrame(() => {
         void bootKernel();

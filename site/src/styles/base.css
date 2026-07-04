@@ -80,9 +80,34 @@ button {
 }
 
 /* layout utilities */
+
+/* the spine owns the left gutter; all page content sits right of the rail */
+main {
+  padding-left: calc(var(--rail-x) + 1rem);
+}
+
 .wrap {
-  width: min(100% - 3rem, var(--content-w));
+  width: min(100% - 2.5rem, var(--content-w));
   margin-inline: auto;
+}
+
+/* elements that clamp onto the rail (astrid-rail draws the connector) */
+.dock-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
+  padding: 0.5em 1em;
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  color: var(--capsule);
+  background: var(--capsule-dim);
+  border: 1px solid color-mix(in srgb, var(--capsule) 45%, transparent);
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.dock-chip .kind {
+  color: var(--text-faint);
 }
 
 .prose {

@@ -64,4 +64,7 @@
 
   --content-w: 72rem;
   --prose-w: 44rem;
+
+  /* the bus spine: x-position of the kernel rail, from the viewport left */
+  --rail-x: clamp(20px, 6vw, 96px);
 }

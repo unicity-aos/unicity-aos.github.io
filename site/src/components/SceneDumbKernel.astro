@@ -1,13 +1,13 @@
 ---
 /** Section 2 — "The kernel is dumb. That is the point."
- *  A live demo publisher fires a real publish every few seconds while the
- *  section is on screen; each visible pulse is a real EventBus delivery and
- *  moves the real HUD counter. */
+ *  The rail routes between endpoints that clamp on from the edges; a live
+ *  demo publisher fires real publishes while the section is on screen, and
+ *  every pulse on the rail is a real EventBus delivery. */
 ---
 
 <section class="scene wrap" id="dumb-kernel" data-scene>
   <div class="scene-copy prose">
-    <p class="eyebrow">01 · the core</p>
+    <p class="eyebrow">01 · the rail</p>
     <h2>The kernel is dumb.<br />That is the point.</h2>
     <p>
       The Astrid kernel routes events, enforces capabilities, and runs the
@@ -15,20 +15,26 @@
       Intelligence is a tenant, never a landlord: replacing how your agent
       thinks never means forking the OS it stands on.
     </p>
+    <p>
+      That thin line on the left is the whole kernel. Everything else on this
+      page clamps onto it.
+    </p>
     <p class="mono live-caption" id="dk-caption" hidden>
-      each pulse you see is a real EventBus delivery inside this tab —
+      each pulse riding the rail is a real EventBus delivery inside this tab —
       <span id="dk-count">0</span> so far in this scene
     </p>
   </div>
-  <div class="scene-stage card">
-    <astrid-bus mode="kernel" id="dk-bus"></astrid-bus>
+  <div class="endpoints" aria-hidden="true">
+    <span class="dock-chip" data-dock="uplink"><span class="kind">uplink ·</span> cli</span>
+    <span class="dock-chip" data-dock="uplink"><span class="kind">uplink ·</span> gateway</span>
+    <span class="dock-chip" data-dock="uplink"><span class="kind">uplink ·</span> discord</span>
   </div>
 </section>
 
 <style>
   .scene {
     display: grid;
-    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    grid-template-columns: minmax(0, 8fr) minmax(0, 4fr);
     gap: var(--s-5);
     align-items: center;
     padding-block: var(--s-8);
@@ -49,15 +55,11 @@
     margin-top: var(--s-2);
   }
 
-  .scene-stage {
-    aspect-ratio: 4 / 3;
-    overflow: hidden;
-  }
-
-  .scene-stage astrid-bus {
-    display: block;
-    width: 100%;
-    height: 100%;
+  .endpoints {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--s-4);
   }
 
   .live-caption {
@@ -90,7 +92,7 @@
           'site.v1.demo.route',
           JSON.stringify({ scene: 'dumb-kernel', at: Date.now() }),
         );
-      }, 2800);
+      }, 2600);
     } else if (!on && timer !== undefined) {
       clearInterval(timer);
       timer = undefined;
