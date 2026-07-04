@@ -117,6 +117,24 @@ function stripThink(s: string): string {
 // block reads as raving. The ladder is non-thinking models, so an empty
 // strict strip means the turn failed; the pill says so honestly instead.
 
+// The gemma3 record ships BOTH context_window_size and sliding_window_size
+// positive (Gemma's sliding-window architecture) and the engine refuses the
+// pair: pin a plain 4k full-attention window instead.
+function chatOptsFor(model: string): Record<string, number> | undefined {
+  if (model.startsWith('gemma3')) {
+    return { context_window_size: 4096, sliding_window_size: -1 };
+  }
+  return undefined;
+}
+
+// If a model's record is broken in this WebLLM cut, fall back to the next
+// best non-thinking model instead of leaving the visitor with a dead pill.
+function fallbackFor(model: string): string | null {
+  if (model.startsWith('gemma3')) return 'Llama-3.2-1B-Instruct-q4f16_1-MLC';
+  if (model.startsWith('SmolLM2')) return 'Qwen2.5-0.5B-Instruct-q4f32_1-MLC';
+  return null;
+}
+
 /** Download and boot the model. Progress goes to the bus and the callback. */
 export async function enableAgent(
   bridge: AstridBridge,
@@ -127,26 +145,41 @@ export async function enableAgent(
     publishStatus(bridge, 'unsupported', 'WebGPU not available in this browser');
     return false;
   }
-  const model = await pickModel();
-  publishStatus(bridge, 'loading', `downloading ${model}`);
-  try {
-    const webllm = await import('@mlc-ai/web-llm');
-    engine = (await webllm.CreateMLCEngine(model, {
-      initProgressCallback: (p: { text: string; progress: number }) => {
-        onProgress(p.text, p.progress ?? 0);
-        void bridge.publish(
-          'site.agent.v1.status',
-          JSON.stringify({ state: 'loading', detail: p.text }),
-        );
-      },
-    })) as unknown as Engine;
-    publishStatus(bridge, 'ready', 'local model loaded, running on your GPU');
-    return true;
-  } catch (err) {
-    engine = null;
-    publishStatus(bridge, 'off', `model load failed: ${err instanceof Error ? err.message : err}`);
-    return false;
+  const webllm = await import('@mlc-ai/web-llm');
+  const first = await pickModel();
+  const candidates = [first, fallbackFor(first)].filter((m): m is string => m !== null);
+  let lastErr: unknown = null;
+  for (const model of candidates) {
+    publishStatus(bridge, 'loading', `downloading ${model}`);
+    try {
+      engine = (await webllm.CreateMLCEngine(
+        model,
+        {
+          initProgressCallback: (p: { text: string; progress: number }) => {
+            onProgress(p.text, p.progress ?? 0);
+            void bridge.publish(
+              'site.agent.v1.status',
+              JSON.stringify({ state: 'loading', detail: p.text }),
+            );
+          },
+        },
+        chatOptsFor(model),
+      )) as unknown as Engine;
+      picked = model; // keep removeModel and the fleet in sync with reality
+      publishStatus(bridge, 'ready', 'local model loaded, running on your GPU');
+      return true;
+    } catch (err) {
+      engine = null;
+      lastErr = err;
+      console.warn(`[agent] ${model} failed to load:`, err);
+    }
   }
+  publishStatus(
+    bridge,
+    'off',
+    `model load failed: ${lastErr instanceof Error ? lastErr.message : lastErr}`,
+  );
+  return false;
 }
 
 /**
@@ -168,6 +201,11 @@ export async function removeModel(bridge: AstridBridge): Promise<void> {
   // cuts — a returning visitor's cache may hold one of those instead
   const shipped = [
     model,
+    'gemma3-1b-it-q4f16_1-MLC',
+    'Llama-3.2-1B-Instruct-q4f16_1-MLC',
+    'Llama-3.2-1B-Instruct-q4f32_1-MLC',
+    'SmolLM2-360M-Instruct-q4f16_1-MLC',
+    'SmolLM2-360M-Instruct-q4f32_1-MLC',
     'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
     'Qwen2.5-0.5B-Instruct-q4f32_1-MLC',
     'Qwen3.5-0.8B-q4f16_1-MLC',
