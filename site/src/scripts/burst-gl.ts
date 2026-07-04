@@ -502,6 +502,16 @@ export function startBurst(
       // the visitor, and then recede into its watcher pose — reversibly
       const P = pose();
 
+      // fully exited (post-hero): keep the loop alive so scrolling back
+      // brings the eye down again, but spend no GPU on invisible frames
+      if (P.alpha < 0.01) {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        raf = requestAnimationFrame(frame);
+        return;
+      }
+
       // the look-at: from the eye's actual world position, the rotation
       // whose face normal points at the camera. gaze blends the idle angles
       // toward it, so at centre it faces you dead-on and from the margin it
