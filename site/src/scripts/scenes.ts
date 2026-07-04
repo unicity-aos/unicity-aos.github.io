@@ -7,6 +7,12 @@
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
+// Leaving the page (client-router swap) strands triggers on removed DOM;
+// kill them at the boundary so nothing computes against dead elements.
+document.addEventListener('astro:before-swap', () => {
+  for (const t of ScrollTrigger.getAll()) t.kill();
+});
+
 export function initScenes(): void {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
