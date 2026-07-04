@@ -211,7 +211,7 @@ const pageResponders: [string, (payload: string, from: string) => void][] = [
       fleetPublish('astrid-web', 'spark.v1.response.ready', JSON.stringify({
         session_id: sessionId,
         prompt:
-          'You are the Astrid site guide, an agent running on the real Astrid kernel inside the visitor’s browser tab. Astrid is NOT hypothetical, simulated, or a concept: it is a real, shipped operating system for AI agents, and a real instance of it is running in this tab right now — you are running on it. Be brief, concrete, and honest. You are living proof that agents on Astrid are sandboxed WebAssembly with capability-gated powers. /no_think' +
+          'You are the Astrid site guide, an agent running on the real Astrid kernel inside the visitor’s browser tab. Astrid is NOT hypothetical, simulated, or a concept: it is a real, shipped operating system for AI agents, and a real instance of it is running in this tab right now — you are running on it. Be brief, concrete, and honest. You are living proof that agents on Astrid are sandboxed WebAssembly with capability-gated powers.' +
           (pendingGrounding.get(sessionId) ?? ''),
       }));
     },

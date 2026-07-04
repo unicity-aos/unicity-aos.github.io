@@ -20,14 +20,16 @@ import type { Chapter } from './book-lens';
 export type AgentState = 'off' | 'unsupported' | 'loading' | 'ready' | 'thinking';
 
 // Platform-aware model pick, one source of truth for the pill AND the
-// fleet. Qwen3.5-0.8B is the sweet spot as of mid-2026: two generations
-// newer than the 0.5B that confabulated "Astrid is hypothetical" (fatal on
-// a site whose pitch is that nothing is staged), at ~450 MB instead of the
-// 1 GB+ the good Gemmas cost. Phones drop to Qwen3-0.6B: iOS Safari kills
-// tabs well past ~500 MB of weights, and a smaller brain beats a crashed
-// tab. q4f16 builds need the GPU to expose shader-f16 (absent on most
-// Android/Adreno); both lines ship q4f32 fallbacks, so every WebGPU device
-// has a working variant.
+// fleet. NON-THINKING models only: the Qwen3/3.5 hybrid-reasoning line
+// free-runs <think> blocks in WebLLM (its ported chat template has no
+// working thinking switch), and an 0.8B thinker rings degenerate loops at
+// visitors. Desktop gets Gemma 3 1B (registry spelling 'gemma3-', no
+// hyphen; f16-only wasm, 711 MB VRAM): the smallest model that reliably
+// holds "you are on a real OS, not a hypothetical" — the failure that
+// started all of this. No-f16 desktops (many Android-class GPUs are
+// desktop-shaped too) get Llama 3.2 1B q4f32. Phones get SmolLM2-360M:
+// iOS Safari kills tabs long before a 1B's working set, and a small brain
+// beats a crashed tab.
 let picked = '';
 export async function pickModel(): Promise<string> {
   if (picked) return picked;
@@ -44,15 +46,17 @@ export async function pickModel(): Promise<string> {
     /Android|iPhone|iPad|Mobi/i.test(navigator.userAgent) ||
     ((navigator as unknown as { deviceMemory?: number }).deviceMemory ?? 8) <= 4;
   picked = mobile
-    ? (f16 ? 'Qwen3-0.6B-q4f16_1-MLC' : 'Qwen3-0.6B-q4f32_1-MLC')
-    : (f16 ? 'Qwen3.5-0.8B-q4f16_1-MLC' : 'Qwen3.5-0.8B-q4f32_1-MLC');
+    ? (f16 ? 'SmolLM2-360M-Instruct-q4f16_1-MLC' : 'SmolLM2-360M-Instruct-q4f32_1-MLC')
+    : (f16 ? 'gemma3-1b-it-q4f16_1-MLC' : 'Llama-3.2-1B-Instruct-q4f32_1-MLC');
   return picked;
 }
 
 /** Human size label for the consent line, matching pickModel's choice. */
 export async function pickModelSize(): Promise<string> {
   const m = await pickModel();
-  return m.includes('0.6B') ? '~350 MB' : '~450 MB';
+  if (m.startsWith('SmolLM2')) return m.includes('q4f32') ? '~370 MB' : '~250 MB';
+  if (m.startsWith('Llama')) return '~800 MB';
+  return '~550 MB';
 }
 
 interface Engine {
@@ -102,37 +106,16 @@ export function webGpuAvailable(): boolean {
   return 'gpu' in navigator;
 }
 
-// Qwen3-family models may think out loud in <think> blocks (the /no_think
-// switch in our prompts asks them not to, but belt and suspenders): hide
-// complete blocks and any still-open one from what visitors see.
+// Defensive only — the ladder is non-thinking models, but if one ever
+// emits a <think> block anyway (or a brought endpoint runs a reasoning
+// model), hide complete blocks and any still-open one from visitors.
 function stripThink(s: string): string {
   return s.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<think>[\s\S]*$/, '').trimStart();
 }
 
-// End-of-turn version: if the model burned its whole token budget inside a
-// think block, the strict strip leaves NOTHING — an empty answer is worse
-// than a rough one, so salvage the reasoning text as the reply.
-function visibleText(raw: string): string {
-  const strict = stripThink(raw);
-  if (strict) return strict;
-  return raw.replace(/<\/?think>/g, '').trimStart();
-}
-
-// Qwen3's thinking switch binds to the LAST user message, not the system
-// prompt. Applied only to the in-tab engine (a brought endpoint may be any
-// model family; we don't decorate someone else's prompts).
-function withNoThink(
-  messages: { role: string; content: string }[],
-): { role: string; content: string }[] {
-  const out = messages.map((m) => ({ ...m }));
-  for (let i = out.length - 1; i >= 0; i--) {
-    if (out[i].role === 'user') {
-      out[i].content += ' /no_think';
-      break;
-    }
-  }
-  return out;
-}
+// NEVER show think text to a visitor — a turn that dies inside a think
+// block reads as raving. The ladder is non-thinking models, so an empty
+// strict strip means the turn failed; the pill says so honestly instead.
 
 /** Download and boot the model. Progress goes to the bus and the callback. */
 export async function enableAgent(
@@ -181,7 +164,25 @@ export async function removeModel(bridge: AstridBridge): Promise<void> {
   engine = null;
   localStorage.removeItem('astrid-agent-optin');
   const webllm = await import('@mlc-ai/web-llm');
-  await webllm.deleteModelAllInfoInCache(model);
+  // "nothing left behind" includes weights this site shipped in EARLIER
+  // cuts — a returning visitor's cache may hold one of those instead
+  const shipped = [
+    model,
+    'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
+    'Qwen2.5-0.5B-Instruct-q4f32_1-MLC',
+    'Qwen3.5-0.8B-q4f16_1-MLC',
+    'Qwen3.5-0.8B-q4f32_1-MLC',
+    'Qwen3-0.6B-q4f16_1-MLC',
+    'Qwen3-0.6B-q4f32_1-MLC',
+    'gemma-2-2b-it-q4f16_1-MLC',
+  ];
+  for (const id of shipped) {
+    try {
+      await webllm.deleteModelAllInfoInCache(id);
+    } catch {
+      /* absent = already clean */
+    }
+  }
   publishStatus(bridge, 'off', 'model removed from this browser — nothing left behind');
 }
 
@@ -236,7 +237,7 @@ async function generate(
   let raw = '';
   let n = 0;
   const stream = await engine.chat.completions.create({
-    messages: withNoThink(messages),
+    messages,
     stream: true,
     temperature: 0.3,
     max_tokens: maxTokens,
@@ -248,7 +249,7 @@ async function generate(
     n += 1;
     onDelta(stripThink(raw), n);
   }
-  return visibleText(raw);
+  return stripThink(raw);
 }
 
 /**
@@ -296,7 +297,7 @@ export async function askAgent(
     {
       role: 'system',
       content:
-        'You are the Astrid site guide, running locally in the visitor’s browser tab on the Astrid kernel’s own page. Astrid is NOT hypothetical or simulated: it is a real, shipped operating system for AI agents, and a real instance is running in this tab right now. Answer briefly (a few sentences) and only from the provided book excerpts. If the excerpts do not cover the question, say so and name the closest chapter. /no_think',
+        'You are the Astrid site guide, running locally in the visitor’s browser tab on the Astrid kernel’s own page. Astrid is NOT hypothetical or simulated: it is a real, shipped operating system for AI agents, and a real instance is running in this tab right now. Answer briefly (a few sentences) and only from the provided book excerpts. If the excerpts do not cover the question, say so and name the closest chapter.',
     },
     ...history.slice(-6),
     { role: 'user', content: `Book excerpts:\n\n${grounding}\n\nQuestion: ${question}` },
