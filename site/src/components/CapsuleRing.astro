@@ -1,45 +1,92 @@
 ---
 /**
- * Decorative background ornament: a ring of blurred capsule bars, drifting
- * slowly. It is the site's core metaphor drawn literally: capsules orbiting
- * a dumb kernel (the empty centre). Pure SVG + CSS, no script, aria-hidden;
- * the drift stops under prefers-reduced-motion.
+ * Decorative background ornament: a dense radial burst of thin dashes,
+ * events radiating from the kernel at the (empty) centre. Two depth layers:
+ * a soft blurred field behind, a near-sharp field in front, both drifting
+ * slowly in opposite directions. Deterministic (seeded, not Math.random) so
+ * builds are reproducible. Pure SVG + CSS, no script, aria-hidden; the
+ * drift stops under prefers-reduced-motion.
  */
-const N = 18;
-// Mostly capsule-purple with bus-teal and audit-pink accents, like the rail.
+const rand = (i: number, salt: number): number => {
+  const x = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
+  return x - Math.floor(x);
+};
+
+// Mostly capsule-purple, with bus-teal, audit-pink, and plain-light accents.
 const palette = [
+  'var(--capsule)',
   'var(--capsule)',
   'var(--capsule)',
   'var(--bus)',
   'var(--capsule)',
   'var(--audit)',
-  'var(--capsule)',
+  'var(--text-dim)',
+  'var(--bus)',
 ];
-const bars = Array.from({ length: N }, (_, i) => ({
-  angle: (360 / N) * i,
-  fill: palette[i % palette.length],
-  opacity: 0.28 + (i % 3) * 0.14,
-  // Slight length variation so the ring reads organic, not mechanical.
-  width: 84 + (i % 4) * 14,
-}));
+
+interface Dash {
+  angle: number;
+  r: number;
+  len: number;
+  w: number;
+  fill: string;
+  opacity: number;
+}
+
+function burst(count: number, salt: number, rMin: number, rMax: number): Dash[] {
+  return Array.from({ length: count }, (_, i) => {
+    const r = rMin + rand(i, salt + 1) * (rMax - rMin);
+    // Longer dashes stay near the rim so the centre keeps its void.
+    const len = 26 + rand(i, salt + 2) * 130 * ((r - rMin) / (rMax - rMin) * 0.7 + 0.3);
+    return {
+      angle: rand(i, salt) * 360,
+      r,
+      len,
+      w: 3 + rand(i, salt + 3) * 4.5,
+      fill: palette[Math.floor(rand(i, salt + 4) * palette.length)],
+      opacity: 0.24 + rand(i, salt + 5) * 0.55,
+    };
+  });
+}
+
+const back = burst(150, 7, 115, 268);
+const front = burst(170, 23, 130, 255);
 ---
 
 <div class="ring-wrap" aria-hidden="true">
   <svg class="ring" viewBox="0 0 600 600">
-    {
-      bars.map((b) => (
-        <rect
-          x={300 - b.width / 2}
-          y="66"
-          width={b.width}
-          height="30"
-          rx="15"
-          fill={b.fill}
-          opacity={b.opacity}
-          transform={`rotate(${b.angle} 300 300)`}
-        />
-      ))
-    }
+    <g class="layer layer-back">
+      {
+        back.map((d) => (
+          <rect
+            x={300 + d.r}
+            y={300 - d.w / 2}
+            width={d.len}
+            height={d.w}
+            rx={d.w / 2}
+            fill={d.fill}
+            opacity={d.opacity * 0.75}
+            transform={`rotate(${d.angle} 300 300)`}
+          />
+        ))
+      }
+    </g>
+    <g class="layer layer-front">
+      {
+        front.map((d) => (
+          <rect
+            x={300 + d.r}
+            y={300 - d.w / 2}
+            width={d.len}
+            height={d.w}
+            rx={d.w / 2}
+            fill={d.fill}
+            opacity={d.opacity}
+            transform={`rotate(${d.angle} 300 300)`}
+          />
+        ))
+      }
+    </g>
   </svg>
 </div>
 
@@ -55,22 +102,35 @@ const bars = Array.from({ length: N }, (_, i) => ({
   .ring {
     position: absolute;
     top: 50%;
-    left: 68%;
-    width: min(72vmin, 46rem);
+    left: 72%;
+    width: min(96vmin, 62rem);
     aspect-ratio: 1;
     translate: -50% -50%;
-    filter: blur(26px);
-    animation: ring-drift 180s linear infinite;
+    /* fade the burst out toward its own edge so it never hard-crops */
+    mask-image: radial-gradient(circle, black 58%, transparent 80%);
+  }
+
+  .layer {
+    transform-origin: 300px 300px;
+  }
+
+  .layer-back {
+    filter: blur(8px);
+    animation: ring-drift 240s linear infinite;
+  }
+
+  .layer-front {
+    animation: ring-drift 320s linear infinite reverse;
   }
 
   @keyframes ring-drift {
     to {
-      rotate: 360deg;
+      transform: rotate(360deg);
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .ring {
+    .layer {
       animation: none;
     }
   }
@@ -78,7 +138,7 @@ const bars = Array.from({ length: N }, (_, i) => ({
   @media (max-width: 900px) {
     .ring {
       left: 50%;
-      opacity: 0.6;
+      opacity: 0.5;
     }
   }
 </style>
