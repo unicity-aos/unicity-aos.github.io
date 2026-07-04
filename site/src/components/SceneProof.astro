@@ -2,11 +2,11 @@
 /** Section 6 — "Proof, not promises." The five-layer gate, compact, plus the
  *  live audit strip (real entries this page generated, once the kernel is up). */
 const layers = [
-  { name: 'Input classification', body: 'Untrusted input is typed and tagged before anything reasons about it.' },
-  { name: 'Capability validation', body: 'Signed tokens checked on every call. No token, no action.' },
-  { name: 'Permission gates', body: 'Tool surfaces enforce their own scoped policy on top.' },
-  { name: 'WASM sandbox', body: 'Capsules get no ambient authority. Fail-closed by construction.' },
-  { name: 'Approval and audit', body: 'Humans gate the irreversible; a BLAKE3 hash chain remembers everything.' },
+  { name: 'Input screening', body: 'Everything arriving from outside is labelled untrusted before any AI reasons about it.' },
+  { name: 'Permission checks', body: 'Every action is checked against what you actually granted. No permission, no action.' },
+  { name: 'Tool-level gates', body: 'Each tool enforces its own rules on top, so one mistake cannot open everything.' },
+  { name: 'The sandbox', body: 'Parts run in sealed boxes with no reach into your system. If something breaks, it breaks inside the box.' },
+  { name: 'Approval and the record', body: 'You approve the irreversible, and a tamper-evident record remembers everything, permanently.' },
 ];
 ---
 
@@ -16,9 +16,10 @@ const layers = [
       <p class="eyebrow">06 · the receipts</p>
       <h2 class="proof-title">Proof, not promises.</h2>
       <p>
-        Security on Astrid is not a system prompt asking nicely. It is five
-        independent layers, each of which must fail before anything is lost,
-        and a cryptographic audit chain that cannot quietly forget.
+        Most AI safety is a polite request written into a prompt. Astrid's is
+        five separate locks, each of which must fail before anything is lost,
+        and a permanent record that cannot quietly forget. You don't have to
+        trust it; you can check it.
       </p>
       <p class="mono live-caption" id="proof-caption" hidden>
         the entries below are real: your clicks in the capability demo are in

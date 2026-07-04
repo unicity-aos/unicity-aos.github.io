@@ -2,18 +2,18 @@
 /** Section 5 — "Agents that grow themselves." The extensibility crescendo:
  *  the self-extension loop as a five-step storyboard, then the pull-quote. */
 const steps = [
-  { n: '01', title: 'Read', body: 'The agent reads the capsule-authoring guide through the docs tool surface. The docs ship with the OS.' },
-  { n: '02', title: 'Write', body: 'It writes a new capsule: a manifest declaring imports, exports, and the capabilities it needs. Nothing more.' },
-  { n: '03', title: 'Build', body: 'It compiles the capsule to wasm32-unknown-unknown inside the sandbox. Zero wasi imports; every host call audited.' },
-  { n: '04', title: 'Install', body: 'It installs the capsule live. The kernel never restarts and never changes. Capabilities can only narrow.' },
-  { n: '05', title: 'Grow', body: 'The OS has a new skill, and the new capsule ships its own docs fragment. The catalog grows. The agent now knows it too.' },
+  { n: '01', title: 'Read', body: 'Your agent reads the manual. The manual ships inside Astrid, so it always knows how the machine it lives in works.' },
+  { n: '02', title: 'Write', body: 'It writes itself a new part: a capsule, declaring up front exactly which permissions it would need. Nothing more.' },
+  { n: '03', title: 'Build', body: 'It builds the part inside the sandbox, where nothing escapes and every move is recorded.' },
+  { n: '04', title: 'Install', body: 'It installs the part live. Nothing restarts. The new part gets only the permissions you allow, never more.' },
+  { n: '05', title: 'Grow', body: 'Your AI now has an ability nobody shipped it with, and the new part documents itself, so the next agent learns it too.' },
 ];
 ---
 
 <section class="grow" id="grow" data-scene>
   <div class="wrap">
     <p class="eyebrow">04 · the point of it all</p>
-    <h2 class="grow-title">Agents that <span class="gradient-text">grow themselves</span>.</h2>
+    <h2 class="grow-title">It <span class="gradient-text">grows new abilities</span>. Safely.</h2>
     <ol class="grow-steps">
       {
         steps.map((s) => (
