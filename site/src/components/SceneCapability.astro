@@ -1,0 +1,276 @@
+---
+/** Section 4 — "Power that only narrows."
+ *  The three buttons drive the REAL CapabilityStore in the in-tab kernel:
+ *  grant() issues a real token, check() runs real find_capability, and each
+ *  action lands as a real entry in the audit ledger shown alongside. */
+---
+
+<section class="scene wrap" id="capabilities" data-scene>
+  <div class="scene-copy prose">
+    <p class="eyebrow">03 · the floor</p>
+    <h2>Power that<br />only narrows.</h2>
+    <p>
+      A capsule holds exactly the capabilities it was granted: scoped, signed,
+      impossible to forge. Delegation can only shrink them. Denial is the
+      default, not an alarm, and every decision lands on a hash-linked audit
+      chain.
+    </p>
+    <p class="dim">
+      Try it. This card is wired to the capability store of the kernel running
+      in your tab, not to an <code>if</code> statement in the page.
+    </p>
+  </div>
+
+  <div class="cap-rig">
+    <div class="card cap-card" id="cap-card">
+      <p class="mono cap-title">capsule: <span class="capsule-word">notes-agent</span></p>
+      <div class="cap-actions">
+        <button class="cap-btn mono" data-res="/home/notes" data-perm="read">
+          read <span>~/notes</span>
+        </button>
+        <button class="cap-btn mono" data-res="/home/notes" data-perm="write">
+          write <span>~/notes</span>
+        </button>
+        <button class="cap-btn mono" data-res="/home/.ssh" data-perm="read">
+          read <span>~/.ssh</span>
+        </button>
+      </div>
+      <p class="cap-result mono" id="cap-result" aria-live="polite">
+        waiting for the kernel…
+      </p>
+    </div>
+    <div class="card cap-ledger">
+      <p class="mono cap-title dim">audit ledger</p>
+      <ol id="cap-ledger" class="mono" reversed></ol>
+    </div>
+  </div>
+</section>
+
+<style>
+  .scene {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: var(--s-5);
+    align-items: center;
+    padding-block: var(--s-8);
+  }
+
+  @media (max-width: 900px) {
+    .scene {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .scene-copy h2 {
+    font-size: var(--step-4);
+    margin-block: var(--s-2) var(--s-3);
+  }
+
+  .scene-copy p + p {
+    margin-top: var(--s-2);
+  }
+
+  .capsule-word {
+    color: var(--capsule);
+  }
+
+  .cap-rig {
+    display: grid;
+    gap: var(--s-2);
+  }
+
+  .cap-card,
+  .cap-ledger {
+    padding: var(--s-3);
+  }
+
+  .cap-title {
+    font-size: var(--step--1);
+    margin-bottom: var(--s-2);
+    letter-spacing: 0.06em;
+  }
+
+  .cap-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-1);
+    margin-bottom: var(--s-2);
+  }
+
+  .cap-btn {
+    background: var(--surface);
+    border: 1px solid var(--line-bright);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 0.55em 1em;
+    font-size: var(--step--1);
+    transition: border-color var(--t-fast) var(--ease-out), transform var(--t-fast) var(--ease-out);
+  }
+
+  .cap-btn span {
+    color: var(--text-dim);
+  }
+
+  .cap-btn:hover:not(:disabled) {
+    border-color: var(--bus);
+  }
+
+  .cap-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .cap-btn[data-flash='grant'] {
+    border-color: var(--grant);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--grant) 40%, transparent);
+  }
+
+  .cap-btn[data-flash='deny'] {
+    border-color: var(--deny);
+    animation: cap-shake 240ms var(--ease-out);
+  }
+
+  @keyframes cap-shake {
+    25% {
+      transform: translateX(-2px);
+    }
+
+    75% {
+      transform: translateX(2px);
+    }
+  }
+
+  .cap-result {
+    font-size: var(--step--1);
+    color: var(--text-dim);
+    min-height: 1.6em;
+  }
+
+  .cap-result[data-kind='grant'] {
+    color: var(--grant);
+  }
+
+  .cap-result[data-kind='deny'] {
+    color: var(--deny);
+  }
+
+  .cap-ledger ol {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 0.3em;
+    font-size: 0.72rem;
+    max-height: 11rem;
+    overflow: auto;
+  }
+
+  .cap-ledger :global(li) {
+    display: flex;
+    gap: 0.7em;
+    padding: 0.32em 0.5em;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    animation: ledger-in var(--t-med) var(--ease-out);
+  }
+
+  @keyframes ledger-in {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+  }
+
+  .cap-ledger :global(.hash) {
+    color: var(--audit);
+    flex: none;
+  }
+
+  .cap-ledger :global(.deny) {
+    color: var(--deny);
+  }
+
+  .cap-ledger :global(.grant) {
+    color: var(--grant);
+  }
+</style>
+
+<script>
+  import { onKernel } from '../scripts/kernel';
+  import type { AstridBridge } from '../scripts/kernel';
+
+  const PRINCIPAL = 'site-visitor';
+  const result = document.getElementById('cap-result')!;
+  const ledger = document.getElementById('cap-ledger')!;
+  const buttons = Array.from(
+    document.querySelectorAll<HTMLButtonElement>('#cap-card .cap-btn'),
+  );
+  buttons.forEach((b) => (b.disabled = true));
+
+  onKernel((status, bridge) => {
+    if (status === 'online' && bridge) {
+      void arm(bridge);
+    } else if (status === 'offline') {
+      result.textContent = 'kernel offline in this browser; demo unavailable (never faked)';
+    }
+  });
+
+  async function arm(bridge: AstridBridge): Promise<void> {
+    // Seed the demo policy in the REAL store: notes readable; nothing else.
+    // "write ~/notes" is granted on first use to show the grant flow.
+    await bridge.grant(PRINCIPAL, '/home/notes', 'read');
+    buttons.forEach((b) => (b.disabled = false));
+    result.textContent = 'capability store armed · notes-agent holds: read ~/notes';
+
+    let writeGranted = false;
+    for (const btn of buttons) {
+      btn.addEventListener('click', () => {
+        void (async () => {
+          const res = btn.dataset.res!;
+          const perm = btn.dataset.perm!;
+          let ok = await bridge.check(PRINCIPAL, res, perm);
+          let note = '';
+          if (!ok && res === '/home/notes' && perm === 'write' && !writeGranted) {
+            // visible grant flow: user-approved widening, then re-check
+            await bridge.grant(PRINCIPAL, '/home/notes', 'write');
+            writeGranted = true;
+            ok = await bridge.check(PRINCIPAL, res, perm);
+            note = ' (granted just now, with your approval)';
+          }
+          flash(btn, ok);
+          result.dataset.kind = ok ? 'grant' : 'deny';
+          result.textContent = ok
+            ? `GRANTED · ${perm} ${res}${note}`
+            : `DENIED · no capability covers ${perm} ${res} · denial recorded`;
+          await stamp(bridge, ok, `${perm} ${res}`);
+        })();
+      });
+    }
+  }
+
+  function flash(btn: HTMLButtonElement, ok: boolean): void {
+    btn.dataset.flash = ok ? 'grant' : 'deny';
+    setTimeout(() => delete btn.dataset.flash, 400);
+  }
+
+  async function stamp(bridge: AstridBridge, ok: boolean, what: string): Promise<void> {
+    // The ledger shows the real audit tail; the newest entry is the decision
+    // that just happened.
+    try {
+      const entries = JSON.parse(await bridge.audit_tail(6)) as Array<Record<string, unknown>>;
+      ledger.innerHTML = '';
+      for (const e of entries.reverse()) {
+        const li = document.createElement('li');
+        const hash = document.createElement('span');
+        hash.className = 'hash';
+        hash.textContent = String(e.hash ?? '').slice(0, 8);
+        const action = document.createElement('span');
+        action.className = ok ? 'grant' : 'deny';
+        action.textContent = String(e.action ?? e.kind ?? what);
+        li.append(hash, action);
+        ledger.append(li);
+      }
+    } catch {
+      /* ledger refresh is best-effort; the store itself already recorded */
+    }
+  }
+</script>

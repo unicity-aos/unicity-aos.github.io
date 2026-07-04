@@ -1,0 +1,67 @@
+/*
+ * Astrid design tokens. "The visible machine": the kernel is grey on purpose,
+ * everything alive happens in capsule-space around it.
+ */
+:root {
+  /* surfaces */
+  --bg: #07080d;
+  --bg-raised: #0d0f17;
+  --surface: #10131d;
+  --line: #1c2030;
+  --line-bright: #2a3048;
+
+  /* ink */
+  --text: #e8eaf2;
+  --text-dim: #8a90a6;
+  --text-faint: #565d75;
+
+  /* the machine */
+  --kernel: #b8becf;
+  --bus: #5eead4;
+  --bus-dim: #2dd4bf33;
+  --capsule: #a78bfa;
+  --capsule-dim: #a78bfa2e;
+  --grant: #4ade80;
+  --deny: #f59e0b;
+  --audit: #f472b6;
+
+  /* gradients */
+  --aurora: linear-gradient(135deg, #5eead4 0%, #818cf8 55%, #a78bfa 100%);
+
+  /* type */
+  --font-display: 'Space Grotesk Variable', 'Space Grotesk', system-ui, sans-serif;
+  --font-body: 'Inter Variable', 'Inter', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', monospace;
+
+  --step--1: clamp(0.83rem, 0.8rem + 0.15vw, 0.94rem);
+  --step-0: clamp(1rem, 0.95rem + 0.25vw, 1.13rem);
+  --step-1: clamp(1.25rem, 1.15rem + 0.5vw, 1.5rem);
+  --step-2: clamp(1.56rem, 1.4rem + 0.8vw, 2rem);
+  --step-3: clamp(1.95rem, 1.7rem + 1.3vw, 2.66rem);
+  --step-4: clamp(2.44rem, 2rem + 2.2vw, 3.55rem);
+  --step-5: clamp(3.05rem, 2.3rem + 3.8vw, 4.75rem);
+  --step-6: clamp(3.8rem, 2.6rem + 6vw, 6.3rem);
+
+  /* space (8px base) */
+  --s-1: 0.5rem;
+  --s-2: 1rem;
+  --s-3: 1.5rem;
+  --s-4: 2rem;
+  --s-5: 3rem;
+  --s-6: 4.5rem;
+  --s-7: 7rem;
+  --s-8: 10rem;
+
+  /* motion */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --t-fast: 160ms;
+  --t-med: 320ms;
+  --t-slow: 640ms;
+
+  --radius: 10px;
+  --radius-lg: 16px;
+
+  --content-w: 72rem;
+  --prose-w: 44rem;
+}

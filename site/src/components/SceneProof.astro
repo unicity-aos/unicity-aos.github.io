@@ -1,0 +1,113 @@
+---
+/** Section 6 — "Proof, not promises." The five-layer gate, compact, plus the
+ *  live audit strip (real entries this page generated, once the kernel is up). */
+const layers = [
+  { name: 'Input classification', body: 'Untrusted input is typed and tagged before anything reasons about it.' },
+  { name: 'Capability validation', body: 'Signed tokens checked on every call. No token, no action.' },
+  { name: 'Permission gates', body: 'Tool surfaces enforce their own scoped policy on top.' },
+  { name: 'WASM sandbox', body: 'Capsules get no ambient authority. Fail-closed by construction.' },
+  { name: 'Approval and audit', body: 'Humans gate the irreversible; a BLAKE3 hash chain remembers everything.' },
+];
+---
+
+<section class="proof hairline-top" id="proof" data-scene>
+  <div class="wrap proof-grid">
+    <div class="prose">
+      <p class="eyebrow">05 · the receipts</p>
+      <h2 class="proof-title">Proof, not promises.</h2>
+      <p>
+        Security on Astrid is not a system prompt asking nicely. It is five
+        independent layers, each of which must fail before anything is lost,
+        and a cryptographic audit chain that cannot quietly forget.
+      </p>
+      <p class="mono live-caption" id="proof-caption" hidden>
+        the entries below are real: your clicks in the capability demo are in
+        this chain
+      </p>
+    </div>
+    <ol class="layers">
+      {
+        layers.map((l, i) => (
+          <li class="layer" style={`--i:${i}`}>
+            <span class="mono layer-n">{String(i + 1).padStart(2, '0')}</span>
+            <div>
+              <h3>{l.name}</h3>
+              <p class="dim">{l.body}</p>
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>
+
+<style>
+  .proof {
+    padding-block: var(--s-8);
+  }
+
+  .proof-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: var(--s-6);
+    align-items: start;
+  }
+
+  @media (max-width: 900px) {
+    .proof-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .proof-title {
+    font-size: var(--step-4);
+    margin-block: var(--s-2) var(--s-3);
+  }
+
+  .layers {
+    list-style: none;
+    padding: 0;
+    display: grid;
+  }
+
+  .layer {
+    display: flex;
+    gap: var(--s-3);
+    padding: var(--s-3) var(--s-2);
+    border-top: 1px solid var(--line);
+  }
+
+  .layer:last-child {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .layer-n {
+    color: var(--audit);
+    font-size: var(--step--1);
+    padding-top: 0.35em;
+  }
+
+  .layer h3 {
+    font-size: var(--step-1);
+    margin-bottom: 0.25em;
+  }
+
+  .layer .dim {
+    font-size: var(--step--1);
+  }
+
+  .live-caption {
+    margin-top: var(--s-3);
+    font-size: var(--step--1);
+    color: var(--audit);
+  }
+</style>
+
+<script>
+  import { onKernel } from '../scripts/kernel';
+
+  const caption = document.getElementById('proof-caption')!;
+  onKernel((status) => {
+    caption.hidden = status !== 'online';
+  });
+</script>

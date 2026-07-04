@@ -1,0 +1,122 @@
+---
+/** Section 5 — "Agents that grow themselves." The extensibility crescendo:
+ *  the self-extension loop as a five-step storyboard, then the pull-quote. */
+const steps = [
+  { n: '01', title: 'Read', body: 'The agent reads the capsule-authoring guide through the docs tool surface. The docs ship with the OS.' },
+  { n: '02', title: 'Write', body: 'It writes a new capsule: a manifest declaring imports, exports, and the capabilities it needs. Nothing more.' },
+  { n: '03', title: 'Build', body: 'It compiles the capsule to wasm32-unknown-unknown inside the sandbox. Zero wasi imports; every host call audited.' },
+  { n: '04', title: 'Install', body: 'It installs the capsule live. The kernel never restarts and never changes. Capabilities can only narrow.' },
+  { n: '05', title: 'Grow', body: 'The OS has a new skill, and the new capsule ships its own docs fragment. The catalog grows. The agent now knows it too.' },
+];
+---
+
+<section class="grow" id="grow" data-scene>
+  <div class="wrap">
+    <p class="eyebrow">04 · the point of it all</p>
+    <h2 class="grow-title">Agents that <span class="gradient-text">grow themselves</span>.</h2>
+    <ol class="grow-steps">
+      {
+        steps.map((s) => (
+          <li class="card grow-step" data-step>
+            <p class="mono grow-n">{s.n}</p>
+            <h3>{s.title}</h3>
+            <p class="dim">{s.body}</p>
+          </li>
+        ))
+      }
+    </ol>
+    <blockquote class="grow-quote">
+      <p>
+        “An agent on Astrid can extend itself. It can write a capsule, compile
+        it, install it, and call it, all inside the sandbox, all recorded on
+        the thread.”
+      </p>
+      <cite class="mono dim">The Astrid Book, afterword</cite>
+    </blockquote>
+    <div class="grow-cta">
+      <a class="btn" href="/book/capsule-model/designing-capsules/">
+        Playground: coming to this tab soon · read the capsule chapters →
+      </a>
+    </div>
+  </div>
+</section>
+
+<style>
+  .grow {
+    padding-block: var(--s-8);
+    border-top: 1px solid var(--line);
+    background:
+      radial-gradient(60% 50% at 50% 0%, color-mix(in srgb, var(--capsule) 7%, transparent), transparent);
+  }
+
+  .grow-title {
+    font-size: var(--step-5);
+    margin-block: var(--s-2) var(--s-6);
+    max-width: 16ch;
+  }
+
+  .grow-steps {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: var(--s-2);
+    margin-bottom: var(--s-6);
+  }
+
+  @media (max-width: 1080px) {
+    .grow-steps {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 620px) {
+    .grow-steps {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .grow-step {
+    padding: var(--s-3);
+    display: grid;
+    gap: var(--s-1);
+    align-content: start;
+    transition: border-color var(--t-med) var(--ease-out);
+  }
+
+  .grow-step:hover {
+    border-color: var(--capsule);
+  }
+
+  .grow-n {
+    color: var(--capsule);
+    font-size: var(--step--1);
+  }
+
+  .grow-step h3 {
+    font-size: var(--step-1);
+  }
+
+  .grow-step .dim {
+    font-size: var(--step--1);
+    line-height: 1.55;
+  }
+
+  .grow-quote {
+    max-width: 46rem;
+    margin-bottom: var(--s-5);
+  }
+
+  .grow-quote p {
+    font-family: var(--font-display);
+    font-size: var(--step-2);
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    margin-bottom: var(--s-2);
+  }
+
+  .grow-quote cite {
+    font-style: normal;
+    font-size: var(--step--1);
+  }
+</style>

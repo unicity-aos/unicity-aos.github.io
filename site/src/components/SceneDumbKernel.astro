@@ -1,0 +1,109 @@
+---
+/** Section 2 — "The kernel is dumb. That is the point."
+ *  A live demo publisher fires a real publish every few seconds while the
+ *  section is on screen; each visible pulse is a real EventBus delivery and
+ *  moves the real HUD counter. */
+---
+
+<section class="scene wrap" id="dumb-kernel" data-scene>
+  <div class="scene-copy prose">
+    <p class="eyebrow">01 · the core</p>
+    <h2>The kernel is dumb.<br />That is the point.</h2>
+    <p>
+      The Astrid kernel routes events, enforces capabilities, and runs the
+      sandbox. Nothing else. No model, no business logic, no protocol parsers.
+      Intelligence is a tenant, never a landlord: replacing how your agent
+      thinks never means forking the OS it stands on.
+    </p>
+    <p class="mono live-caption" id="dk-caption" hidden>
+      each pulse you see is a real EventBus delivery inside this tab —
+      <span id="dk-count">0</span> so far in this scene
+    </p>
+  </div>
+  <div class="scene-stage card">
+    <astrid-bus mode="kernel" id="dk-bus"></astrid-bus>
+  </div>
+</section>
+
+<style>
+  .scene {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: var(--s-5);
+    align-items: center;
+    padding-block: var(--s-8);
+  }
+
+  @media (max-width: 900px) {
+    .scene {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .scene-copy h2 {
+    font-size: var(--step-4);
+    margin-block: var(--s-2) var(--s-3);
+  }
+
+  .scene-copy p + p {
+    margin-top: var(--s-2);
+  }
+
+  .scene-stage {
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+  }
+
+  .scene-stage astrid-bus {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+
+  .live-caption {
+    font-size: var(--step--1);
+    color: var(--bus);
+  }
+
+  .live-caption span {
+    font-variant-numeric: tabular-nums;
+  }
+</style>
+
+<script>
+  import { onKernel, kernel } from '../scripts/kernel';
+
+  const caption = document.getElementById('dk-caption')!;
+  const count = document.getElementById('dk-count')!;
+  let seen = 0;
+  let timer: number | undefined;
+
+  // demo publisher: real publishes onto the real bus, only while visible
+  const section = document.getElementById('dumb-kernel')!;
+  const io = new IntersectionObserver((entries) => {
+    const on = entries[0]?.isIntersecting ?? false;
+    if (on && timer === undefined) {
+      timer = window.setInterval(() => {
+        const bridge = kernel();
+        if (!bridge) return;
+        void bridge.publish(
+          'site.v1.demo.route',
+          JSON.stringify({ scene: 'dumb-kernel', at: Date.now() }),
+        );
+      }, 2800);
+    } else if (!on && timer !== undefined) {
+      clearInterval(timer);
+      timer = undefined;
+    }
+  });
+  io.observe(section);
+
+  onKernel((status, bridge) => {
+    if (status !== 'online' || !bridge) return;
+    caption.hidden = false;
+    bridge.subscribe('site.v1.demo.**', () => {
+      seen += 1;
+      count.textContent = String(seen);
+    });
+  });
+</script>

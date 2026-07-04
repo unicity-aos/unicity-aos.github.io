@@ -1,0 +1,260 @@
+---
+/**
+ * Fixed kernel HUD. Every number here is read from the real kernel bridge;
+ * before boot it shows "booting", and if wasm is unavailable it says so
+ * plainly. Clicking opens a drawer with the live audit tail and a note on
+ * how to verify the kernel in devtools.
+ */
+---
+
+<button id="hud" class="hud mono" aria-expanded="false" aria-controls="hud-drawer" title="Kernel status">
+  <span id="hud-dot" class="hud-dot" data-state="booting" aria-hidden="true"></span>
+  <span id="hud-text">booting kernel…</span>
+</button>
+
+<aside id="hud-drawer" class="hud-drawer card" hidden>
+  <header class="hud-drawer-head">
+    <h2 class="mono">kernel</h2>
+    <button id="hud-close" class="hud-close mono" aria-label="Close kernel panel">✕</button>
+  </header>
+  <dl class="hud-facts mono">
+    <div><dt>state</dt><dd id="hud-f-state">booting</dd></div>
+    <div><dt>build</dt><dd id="hud-f-build">–</dd></div>
+    <div><dt>events routed</dt><dd id="hud-f-events">–</dd></div>
+    <div><dt>audit entries</dt><dd id="hud-f-audit">–</dd></div>
+  </dl>
+  <h3 class="mono dim">audit tail</h3>
+  <ol id="hud-audit" class="hud-audit mono" reversed></ol>
+  <p class="hud-note dim">
+    This is not a mock. Open devtools → Network and look for
+    <code>kernel_web_bg.wasm</code>: the same <code>astrid-kernel</code> crate
+    the daemon ships, compiled to <code>wasm32-unknown-unknown</code>, booted
+    in this tab.
+  </p>
+</aside>
+
+<style>
+  .hud {
+    position: fixed;
+    top: var(--s-2);
+    right: var(--s-2);
+    z-index: 100;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6em;
+    padding: 0.45em 0.9em;
+    font-size: var(--step--1);
+    color: var(--text-dim);
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    backdrop-filter: blur(12px);
+    transition: border-color var(--t-fast) var(--ease-out);
+  }
+
+  .hud:hover {
+    border-color: var(--line-bright);
+    color: var(--text);
+  }
+
+  .hud-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-faint);
+    flex: none;
+  }
+
+  .hud-dot[data-state='online'] {
+    background: var(--bus);
+    box-shadow: 0 0 8px var(--bus);
+    animation: hud-pulse 2.4s ease-in-out infinite;
+  }
+
+  .hud-dot[data-state='offline'] {
+    background: var(--text-faint);
+  }
+
+  @keyframes hud-pulse {
+    50% {
+      box-shadow: 0 0 2px var(--bus);
+    }
+  }
+
+  .hud-drawer {
+    position: fixed;
+    top: calc(var(--s-2) + 3rem);
+    right: var(--s-2);
+    z-index: 100;
+    width: min(26rem, calc(100vw - 2 * var(--s-2)));
+    max-height: min(34rem, 78vh);
+    overflow: auto;
+    padding: var(--s-3);
+  }
+
+  .hud-drawer-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: var(--s-2);
+  }
+
+  .hud-drawer-head h2 {
+    font-size: var(--step-0);
+    letter-spacing: 0.1em;
+  }
+
+  .hud-close {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    padding: 0.2em 0.4em;
+  }
+
+  .hud-close:hover {
+    color: var(--text);
+  }
+
+  .hud-facts {
+    display: grid;
+    gap: 0.35em;
+    font-size: var(--step--1);
+    margin-bottom: var(--s-3);
+  }
+
+  .hud-facts div {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--s-2);
+  }
+
+  .hud-facts dt {
+    color: var(--text-faint);
+  }
+
+  .hud-facts dd {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hud-drawer h3 {
+    font-size: var(--step--1);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: var(--s-1);
+  }
+
+  .hud-audit {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 0.3em;
+    font-size: 0.72rem;
+    margin-bottom: var(--s-3);
+  }
+
+  .hud-audit :global(li) {
+    display: flex;
+    gap: 0.8em;
+    padding: 0.35em 0.5em;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .hud-audit :global(.hash) {
+    color: var(--audit);
+    flex: none;
+  }
+
+  .hud-audit :global(.action) {
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .hud-note {
+    font-size: var(--step--1);
+    line-height: 1.5;
+  }
+
+  .hud-note code {
+    color: var(--bus);
+    font-size: 0.95em;
+  }
+</style>
+
+<script>
+  import { onKernel, kernel } from '../scripts/kernel';
+
+  const $ = (id: string) => document.getElementById(id)!;
+  const hud = $('hud');
+  const drawer = $('hud-drawer');
+  const dot = $('hud-dot');
+  const text = $('hud-text');
+
+  let commit = '';
+  let ticker: number | undefined;
+
+  onKernel((status, bridge) => {
+    dot.dataset.state = status;
+    $('hud-f-state').textContent = status;
+    if (status === 'online' && bridge) {
+      commit = bridge.kernel_commit();
+      $('hud-f-build').textContent = `astrid-kernel@${commit}`;
+      startTicker();
+    } else if (status === 'offline') {
+      text.textContent = 'kernel offline (static mode)';
+    }
+  });
+
+  function startTicker(): void {
+    if (ticker !== undefined) return;
+    const tick = async () => {
+      const bridge = kernel();
+      if (!bridge) return;
+      const events = bridge.events_routed();
+      const audit = await bridge.audit_len();
+      text.textContent = `kernel online · ${events} events routed`;
+      $('hud-f-events').textContent = String(events);
+      $('hud-f-audit').textContent = String(audit);
+      if (!drawer.hidden) await refreshAudit();
+    };
+    void tick();
+    ticker = window.setInterval(() => void tick(), 1500);
+  }
+
+  async function refreshAudit(): Promise<void> {
+    const bridge = kernel();
+    if (!bridge) return;
+    try {
+      const entries = JSON.parse(await bridge.audit_tail(8)) as Array<Record<string, unknown>>;
+      const list = $('hud-audit');
+      list.innerHTML = '';
+      for (const e of entries.reverse()) {
+        const li = document.createElement('li');
+        const hash = document.createElement('span');
+        hash.className = 'hash';
+        hash.textContent = String(e.hash ?? '').slice(0, 8);
+        const action = document.createElement('span');
+        action.className = 'action';
+        action.textContent = String(e.action ?? e.kind ?? '');
+        li.append(hash, action);
+        list.append(li);
+      }
+    } catch {
+      /* tail stays as-is; next tick retries */
+    }
+  }
+
+  hud.addEventListener('click', () => {
+    const open = drawer.hidden;
+    drawer.hidden = !open;
+    hud.setAttribute('aria-expanded', String(open));
+    if (open) void refreshAudit();
+  });
+  $('hud-close').addEventListener('click', () => {
+    drawer.hidden = true;
+    hud.setAttribute('aria-expanded', 'false');
+  });
+</script>

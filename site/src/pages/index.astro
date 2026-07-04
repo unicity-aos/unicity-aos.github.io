@@ -1,0 +1,31 @@
+---
+import Base from '../layouts/Base.astro';
+import Hero from '../components/Hero.astro';
+import SceneDumbKernel from '../components/SceneDumbKernel.astro';
+import SceneCapsules from '../components/SceneCapsules.astro';
+import SceneCapability from '../components/SceneCapability.astro';
+import SceneGrow from '../components/SceneGrow.astro';
+import SceneProof from '../components/SceneProof.astro';
+import SceneBooks from '../components/SceneBooks.astro';
+import SceneStart from '../components/SceneStart.astro';
+---
+
+<Base
+  title="Astrid — the operating system agents extend"
+  description="A secure agent runtime: sandboxed WASM capsules, signed capabilities, a cryptographic audit chain. This page runs the real Astrid kernel in your browser."
+>
+  <main>
+    <Hero />
+    <SceneDumbKernel />
+    <SceneCapsules />
+    <SceneCapability />
+    <SceneGrow />
+    <SceneProof />
+    <SceneBooks />
+    <SceneStart />
+  </main>
+  <script>
+    import { initScenes } from '../scripts/scenes';
+    initScenes();
+  </script>
+</Base>

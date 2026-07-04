@@ -1,0 +1,108 @@
+---
+/** Section 8 — get started + footer. */
+---
+
+<section class="start hairline-top" id="start">
+  <div class="wrap start-grid">
+    <div class="prose">
+      <h2 class="start-title">Run it.</h2>
+      <p class="dim">
+        One daemon. Every frontend is an uplink; every ability is a capsule.
+      </p>
+      <pre class="card start-term"><code><span class="dim">$</span> brew install unicity-astrid/tap/astrid
+<span class="dim">$</span> astrid start</code></pre>
+    </div>
+    <nav class="start-links mono" aria-label="Project links">
+      <a href="https://github.com/unicity-astrid/astrid">github.com/unicity-astrid</a>
+      <a href="https://github.com/unicity-astrid/rfcs">the RFCs</a>
+      <a href="https://github.com/unicity-astrid/sdk-rust">capsule SDK (Rust)</a>
+      <a href="/book/">the book</a>
+      <a href="/handbook/">the handbook</a>
+    </nav>
+  </div>
+  <footer class="footer">
+    <div class="wrap footer-inner">
+      <p class="mono dim footer-tag">
+        Run AI agents and the tools they use without having to trust them.
+      </p>
+      <p class="mono footer-fine" id="footer-live">ASTRID</p>
+    </div>
+  </footer>
+</section>
+
+<style>
+  .start {
+    padding-top: var(--s-8);
+  }
+
+  .start-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: var(--s-6);
+    align-items: end;
+    padding-bottom: var(--s-7);
+  }
+
+  @media (max-width: 900px) {
+    .start-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .start-title {
+    font-size: var(--step-5);
+    margin-bottom: var(--s-2);
+  }
+
+  .start-term {
+    margin-top: var(--s-3);
+    padding: var(--s-3);
+    font-size: var(--step-0);
+    line-height: 1.9;
+    overflow-x: auto;
+  }
+
+  .start-links {
+    display: grid;
+    gap: var(--s-1);
+    font-size: var(--step--1);
+    justify-items: start;
+  }
+
+  .footer {
+    border-top: 1px solid var(--line);
+    padding-block: var(--s-4);
+  }
+
+  .footer-inner {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--s-3);
+    flex-wrap: wrap;
+  }
+
+  .footer-tag {
+    font-size: var(--step--1);
+  }
+
+  .footer-fine {
+    font-size: 0.72rem;
+    letter-spacing: 0.3em;
+    color: var(--text-faint);
+  }
+</style>
+
+<script>
+  import { onKernel, kernel } from '../scripts/kernel';
+
+  // the footer wordmark quietly counts real routed events; a signature, not a widget
+  const el = document.getElementById('footer-live')!;
+  onKernel((status) => {
+    if (status !== 'online') return;
+    setInterval(() => {
+      const bridge = kernel();
+      if (bridge) el.textContent = `ASTRID · ${bridge.events_routed()} EVENTS ROUTED IN YOUR TAB`;
+    }, 2000);
+  });
+</script>
