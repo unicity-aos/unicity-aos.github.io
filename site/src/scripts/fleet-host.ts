@@ -389,7 +389,11 @@ function hostFor(name: string): Record<string, unknown> {
     'openai-compat': {
       base_url: 'https://llm.tab.local',
       model: FLEET_MODEL,
-      api_key: '',
+      // The capsule's generate path requires a non-empty key (it refuses to
+      // run keyless). This placeholder goes into an Authorization header on a
+      // request that never leaves the tab: our in-page HTTP shim answers it
+      // from the local model and ignores headers entirely. Not a secret.
+      api_key: 'in-tab-local',
     },
   };
   const t0 = performance.now();
