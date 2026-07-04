@@ -366,10 +366,30 @@ export function startBurst(
   const uGrainTime = grainProg ? gl.getUniformLocation(grainProg, 'uTime') : null;
   const emptyVao = gl.createVertexArray(); // for attributeless fullscreen tris
 
-  // gentle tilt so the planks show their side faces (the 3D read)
-  const tx = 0.52;
-  const cx = Math.cos(tx), sx = Math.sin(tx);
-  gl.uniformMatrix3fv(uTilt, false, [1, 0, 0, 0, cx, sx, 0, -sx, cx]);
+  // the eye looks AT the page: pitch shows the planks' side faces (the 3D
+  // read) and yaw turns the disc's face toward the screen centre, left of
+  // the burst, instead of gazing off-frame
+  const PITCH = 0.34;
+  const YAW = -0.52;
+  const rx = ((a: number) => {
+    const c = Math.cos(a), s = Math.sin(a);
+    return [[1, 0, 0], [0, c, -s], [0, s, c]];
+  })(PITCH);
+  const ry = ((a: number) => {
+    const c = Math.cos(a), s = Math.sin(a);
+    return [[c, 0, s], [0, 1, 0], [-s, 0, c]];
+  })(YAW);
+  // M = rx * ry, sent column-major
+  const m = Array.from({ length: 3 }, (_, r) =>
+    Array.from({ length: 3 }, (_, c) =>
+      rx[r][0] * ry[0][c] + rx[r][1] * ry[1][c] + rx[r][2] * ry[2][c],
+    ),
+  );
+  gl.uniformMatrix3fv(uTilt, false, [
+    m[0][0], m[1][0], m[2][0],
+    m[0][1], m[1][1], m[2][1],
+    m[0][2], m[1][2], m[2][2],
+  ]);
 
   // paper rules: no depth test anywhere. Within a wheel, fixed painter's
   // order + backface culling; between wheels, back-to-front compositing.
