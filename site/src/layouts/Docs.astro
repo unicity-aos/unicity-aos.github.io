@@ -1,0 +1,327 @@
+---
+import Base from './Base.astro';
+import type { NavGroup } from '../lib/docs-nav';
+import type { MarkdownHeading } from 'astro';
+
+interface Props {
+  bookTitle: string;
+  basePath: string; // '/book' | '/handbook'
+  title: string;
+  nav: NavGroup[];
+  currentSlug: string;
+  headings: MarkdownHeading[];
+  prev?: { title: string; slug: string } | undefined;
+  next?: { title: string; slug: string } | undefined;
+}
+
+const { bookTitle, basePath, title, nav, currentSlug, headings, prev, next } = Astro.props;
+const toc = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
+---
+
+<Base title={`${title} · ${bookTitle}`} description={`${bookTitle}: ${title}`}>
+  <main class="docs">
+    <nav class="docs-nav" aria-label={bookTitle}>
+      <p class="mono docs-nav-title">{bookTitle}</p>
+      {
+        nav.map((group) => (
+          <section class="docs-group">
+            {group.part && <p class="eyebrow docs-part">{group.part}</p>}
+            <ul>
+              {group.items.map((item) => (
+                <li>
+                  <a
+                    href={`${basePath}/${item.slug}/`}
+                    aria-current={item.slug === currentSlug ? 'page' : undefined}
+                  >
+                    {item.title}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
+      }
+    </nav>
+
+    <article class="docs-body">
+      <h1 class="docs-title">{title}</h1>
+      <div class="doc-prose">
+        <slot />
+      </div>
+      <footer class="docs-pager hairline-top">
+        {
+          prev ? (
+            <a class="pager-link" href={`${basePath}/${prev.slug}/`}>
+              <span class="mono dim">← previous</span>
+              <span>{prev.title}</span>
+            </a>
+          ) : (
+            <span />
+          )
+        }
+        {
+          next && (
+            <a class="pager-link pager-next" href={`${basePath}/${next.slug}/`}>
+              <span class="mono dim">next →</span>
+              <span>{next.title}</span>
+            </a>
+          )
+        }
+      </footer>
+    </article>
+
+    {
+      toc.length > 2 && (
+        <aside class="docs-toc" aria-label="On this page">
+          <p class="mono dim docs-toc-title">on this page</p>
+          <ul>
+            {toc.map((h) => (
+              <li class={`toc-${h.depth}`}>
+                <a href={`#${h.slug}`}>{h.text}</a>
+              </li>
+            ))}
+          </ul>
+        </aside>
+      )
+    }
+  </main>
+</Base>
+
+<style>
+  .docs {
+    display: grid;
+    grid-template-columns: 17rem minmax(0, 1fr) 13rem;
+    gap: var(--s-5);
+    width: min(100% - 2.5rem, 90rem);
+    margin-inline: auto;
+    padding-block: calc(var(--s-6) + 2rem) var(--s-7);
+  }
+
+  @media (max-width: 1200px) {
+    .docs {
+      grid-template-columns: 16rem minmax(0, 1fr);
+    }
+
+    .docs-toc {
+      display: none;
+    }
+  }
+
+  @media (max-width: 860px) {
+    .docs {
+      grid-template-columns: 1fr;
+    }
+
+    .docs-nav {
+      position: static !important;
+      max-height: none !important;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: var(--s-3);
+    }
+  }
+
+  .docs-nav,
+  .docs-toc {
+    position: sticky;
+    top: 5rem;
+    max-height: calc(100vh - 6rem);
+    overflow-y: auto;
+    font-size: var(--step--1);
+    scrollbar-width: thin;
+  }
+
+  .docs-nav-title {
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    margin-bottom: var(--s-3);
+  }
+
+  .docs-part {
+    margin-block: var(--s-3) var(--s-1);
+    font-size: 0.66rem;
+  }
+
+  .docs-group ul,
+  .docs-toc ul {
+    list-style: none;
+    padding: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  .docs-group a {
+    display: block;
+    padding: 0.32em 0.6em;
+    color: var(--text-dim);
+    border-left: 1px solid var(--line);
+    border-radius: 0 6px 6px 0;
+  }
+
+  .docs-group a:hover {
+    color: var(--text);
+    text-decoration: none;
+    background: var(--surface);
+  }
+
+  .docs-group a[aria-current='page'] {
+    color: var(--bus);
+    border-left-color: var(--bus);
+    background: color-mix(in srgb, var(--bus) 7%, transparent);
+  }
+
+  .docs-title {
+    font-size: var(--step-4);
+    margin-bottom: var(--s-4);
+  }
+
+  .docs-toc-title {
+    font-size: 0.66rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: var(--s-2);
+  }
+
+  .docs-toc a {
+    color: var(--text-faint);
+    display: block;
+    padding-block: 0.22em;
+  }
+
+  .docs-toc a:hover {
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .docs-toc .toc-3 {
+    padding-left: 0.9em;
+  }
+
+  .docs-pager {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--s-3);
+    margin-top: var(--s-6);
+    padding-top: var(--s-3);
+  }
+
+  .pager-link {
+    display: grid;
+    gap: 0.15em;
+    color: var(--text);
+    max-width: 46%;
+  }
+
+  .pager-link:hover {
+    text-decoration: none;
+    color: var(--bus);
+  }
+
+  .pager-link .mono {
+    font-size: 0.7rem;
+  }
+
+  .pager-next {
+    text-align: right;
+  }
+</style>
+
+<style is:global>
+  /* reading typography for rendered book markdown */
+  .doc-prose {
+    max-width: 46rem;
+    line-height: 1.75;
+  }
+
+  .doc-prose h1,
+  .doc-prose h2,
+  .doc-prose h3,
+  .doc-prose h4 {
+    margin-block: 1.6em 0.6em;
+    scroll-margin-top: 5rem;
+  }
+
+  .doc-prose h2 {
+    font-size: var(--step-2);
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .doc-prose h3 {
+    font-size: var(--step-1);
+  }
+
+  .doc-prose p,
+  .doc-prose ul,
+  .doc-prose ol {
+    margin-block: 0 1em;
+  }
+
+  .doc-prose ul,
+  .doc-prose ol {
+    padding-left: 1.4em;
+  }
+
+  .doc-prose li + li {
+    margin-top: 0.35em;
+  }
+
+  .doc-prose code {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 0.1em 0.35em;
+    font-size: 0.85em;
+  }
+
+  .doc-prose pre {
+    background: var(--bg-raised) !important;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: var(--s-2) var(--s-3);
+    overflow-x: auto;
+    margin-block: 0 1.2em;
+    font-size: var(--step--1);
+    line-height: 1.6;
+  }
+
+  .doc-prose pre code {
+    background: none;
+    border: none;
+    padding: 0;
+    font-size: 1em;
+  }
+
+  .doc-prose blockquote {
+    border-left: 2px solid var(--capsule);
+    padding-left: var(--s-2);
+    color: var(--text-dim);
+    margin-block: 0 1em;
+  }
+
+  .doc-prose table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-block: 0 1.2em;
+    font-size: var(--step--1);
+  }
+
+  .doc-prose th,
+  .doc-prose td {
+    border: 1px solid var(--line);
+    padding: 0.5em 0.8em;
+    text-align: left;
+  }
+
+  .doc-prose th {
+    font-family: var(--font-display);
+    background: var(--surface);
+  }
+
+  .doc-prose hr {
+    border: none;
+    border-top: 1px solid var(--line);
+    margin-block: 2em;
+  }
+</style>

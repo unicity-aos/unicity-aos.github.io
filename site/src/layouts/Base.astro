@@ -31,6 +31,12 @@ const { title, description } = Astro.props;
   </head>
   <body>
     <astrid-rail aria-hidden="true"></astrid-rail>
+    <nav class="site-tabs mono" aria-label="Site">
+      <a href="/" class="site-mark">ASTRID</a>
+      <a href="/book/">the book</a>
+      <a href="/handbook/">handbook</a>
+      <span class="site-soon" title="Coming soon">playground</span>
+    </nav>
     <Hud />
     <slot />
     <script>
@@ -41,5 +47,43 @@ const { title, description } = Astro.props;
         void bootKernel();
       });
     </script>
+    <style>
+      .site-tabs {
+        position: fixed;
+        top: var(--s-2);
+        left: calc(var(--rail-x) + 1.25rem);
+        z-index: 100;
+        display: flex;
+        align-items: baseline;
+        gap: var(--s-3);
+        font-size: var(--step--1);
+      }
+
+      .site-tabs a {
+        color: var(--text-dim);
+      }
+
+      .site-tabs a:hover {
+        color: var(--text);
+        text-decoration: none;
+      }
+
+      .site-mark {
+        color: var(--text) !important;
+        letter-spacing: 0.28em;
+        font-weight: 500;
+      }
+
+      .site-soon {
+        color: var(--text-faint);
+        cursor: default;
+      }
+
+      @media (max-width: 640px) {
+        .site-tabs {
+          gap: var(--s-2);
+        }
+      }
+    </style>
   </body>
 </html>
