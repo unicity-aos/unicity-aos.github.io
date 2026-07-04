@@ -37,8 +37,19 @@ export class AstridRail extends HTMLElement {
   private reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   private unsub: (() => void) | null = null;
   private onScroll = () => this.drawStatic();
+  private initialized = false;
 
   connectedCallback(): void {
+    // The rail persists across client-router navigations (transition:persist
+    // moves the element, which re-fires this callback): re-scan the new
+    // page's docks and restart the loop, but never duplicate setup.
+    if (this.initialized) {
+      this.rescanDocks();
+      this.startLoop();
+      return;
+    }
+    this.initialized = true;
+
     this.canvas = document.createElement('canvas');
     Object.assign(this.canvas.style, {
       position: 'fixed',
@@ -50,11 +61,8 @@ export class AstridRail extends HTMLElement {
     this.appendChild(this.canvas);
     this.ctx = this.canvas.getContext('2d')!;
 
-    this.docks = Array.from(document.querySelectorAll<HTMLElement>('[data-dock]')).map((el) => ({
-      el,
-      label: el.dataset.dock ?? '',
-      t: this.reduced ? 1 : 0,
-    }));
+    this.rescanDocks();
+    document.addEventListener('astro:page-load', () => this.rescanDocks());
 
     const resize = () => {
       const dpr = Math.min(devicePixelRatio || 1, 2);
@@ -81,19 +89,36 @@ export class AstridRail extends HTMLElement {
       addEventListener('scroll', this.onScroll, { passive: true });
       this.drawStatic();
     } else {
-      const loop = (t: number) => {
-        this.step(t);
-        this.draw(t);
-        this.raf = requestAnimationFrame(loop);
-      };
-      this.raf = requestAnimationFrame(loop);
+      this.startLoop();
     }
   }
 
+  private rescanDocks(): void {
+    this.docks = Array.from(document.querySelectorAll<HTMLElement>('[data-dock]')).map((el) => ({
+      el,
+      label: el.dataset.dock ?? '',
+      t: this.reduced ? 1 : 0,
+    }));
+    if (this.reduced) this.drawStatic();
+  }
+
+  private startLoop(): void {
+    if (this.reduced || this.raf) return;
+    const loop = (t: number) => {
+      this.step(t);
+      this.draw(t);
+      this.raf = requestAnimationFrame(loop);
+    };
+    this.raf = requestAnimationFrame(loop);
+  }
+
   disconnectedCallback(): void {
-    if (this.raf) cancelAnimationFrame(this.raf);
-    removeEventListener('scroll', this.onScroll);
-    this.unsub?.();
+    if (this.raf) {
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
+    }
+    // Keep the scroll listener and kernel subscription: a persisted element
+    // is disconnected only for the instant the router moves it.
   }
 
   private railX(): number {

@@ -89,16 +89,23 @@
 </style>
 
 <script>
-  import { onKernel } from '../scripts/kernel';
+  import { onKernel, kernelStatus, kernel } from '../scripts/kernel';
 
-  const claim = document.getElementById('hero-claim')!;
-  const text = document.getElementById('hero-claim-text')!;
-  onKernel((status, bridge) => {
+  // Elements are re-created on every client-router visit; the module is not.
+  // Re-apply the current kernel state to whatever hero is in the DOM.
+  function apply(): void {
+    const claim = document.getElementById('hero-claim');
+    const text = document.getElementById('hero-claim-text');
+    if (!claim || !text) return;
+    const status = kernelStatus();
+    const bridge = kernel();
     claim.dataset.state = status;
     if (status === 'online' && bridge) {
       text.textContent = `this page is running the real Astrid kernel · astrid-kernel@${bridge.kernelCommit()}`;
     } else if (status === 'offline') {
       text.textContent = 'kernel unavailable in this browser · showing static scenes';
     }
-  });
+  }
+  onKernel(apply);
+  document.addEventListener('astro:page-load', apply);
 </script>

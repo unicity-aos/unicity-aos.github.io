@@ -12,6 +12,10 @@ export function initScenes(): void {
 
   gsap.registerPlugin(ScrollTrigger);
 
+  // Client-router navigations replace the content while this module (and
+  // GSAP) persist: kill triggers bound to the previous page's DOM first.
+  for (const t of ScrollTrigger.getAll()) t.kill();
+
   // generic section reveals
   for (const scene of document.querySelectorAll<HTMLElement>('[data-scene]')) {
     const targets = scene.querySelectorAll<HTMLElement>(

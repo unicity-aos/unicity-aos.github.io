@@ -8,11 +8,12 @@
 import type { AstridBridge } from './kernel';
 
 let current = '';
+let io: IntersectionObserver | null = null;
+let started = false;
 
-export function startNavContext(bridge: AstridBridge): void {
-  const targets = document.querySelectorAll<HTMLElement>('section[id]');
-  if (!targets.length) return;
-  const io = new IntersectionObserver(
+function observe(bridge: AstridBridge): void {
+  io?.disconnect();
+  io = new IntersectionObserver(
     (entries) => {
       for (const e of entries) {
         if (!e.isIntersecting) continue;
@@ -24,7 +25,15 @@ export function startNavContext(bridge: AstridBridge): void {
     },
     { rootMargin: '-35% 0px -55% 0px' },
   );
-  for (const t of targets) io.observe(t);
+  for (const t of document.querySelectorAll<HTMLElement>('section[id]')) io.observe(t);
+}
+
+export function startNavContext(bridge: AstridBridge): void {
+  if (started) return;
+  started = true;
+  observe(bridge);
+  // Client-router navigations replace the sections; re-observe the new set.
+  document.addEventListener('astro:page-load', () => observe(bridge));
 }
 
 export function currentSection(): string {

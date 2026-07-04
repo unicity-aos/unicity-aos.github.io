@@ -47,7 +47,7 @@ export function webGpuAvailable(): boolean {
 /** Download and boot the model. Progress goes to the bus and the callback. */
 export async function enableAgent(
   bridge: AstridBridge,
-  onProgress: (text: string) => void,
+  onProgress: (text: string, progress: number) => void,
 ): Promise<boolean> {
   if (engine) return true;
   if (!webGpuAvailable()) {
@@ -58,8 +58,8 @@ export async function enableAgent(
   try {
     const webllm = await import('@mlc-ai/web-llm');
     engine = (await webllm.CreateMLCEngine(MODEL, {
-      initProgressCallback: (p: { text: string }) => {
-        onProgress(p.text);
+      initProgressCallback: (p: { text: string; progress: number }) => {
+        onProgress(p.text, p.progress ?? 0);
         void bridge.publish(
           'site.agent.v1.status',
           JSON.stringify({ state: 'loading', detail: p.text }),

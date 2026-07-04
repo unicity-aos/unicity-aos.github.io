@@ -105,11 +105,15 @@ const layers = [
 </style>
 
 <script>
-  import { onKernel } from '../scripts/kernel';
+  import { onKernel, kernelStatus, kernel } from '../scripts/kernel';
 
-  const caption = document.getElementById('proof-caption')!;
-  onKernel((status, bridge) => {
-    // only claim the chain is on the page once the audit read surface exists
-    caption.hidden = status !== 'online' || !bridge?.auditTail;
-  });
+  // only claim the chain is on the page once the audit read surface exists;
+  // re-applied per navigation because the caption element is re-created
+  function apply(): void {
+    const caption = document.getElementById('proof-caption');
+    if (!caption) return;
+    caption.hidden = kernelStatus() !== 'online' || !kernel()?.auditTail;
+  }
+  onKernel(apply);
+  document.addEventListener('astro:page-load', apply);
 </script>

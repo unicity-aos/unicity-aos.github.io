@@ -32,6 +32,10 @@ import SceneStart from '../components/SceneStart.astro';
   </main>
   <script>
     import { initScenes } from '../scripts/scenes';
-    initScenes();
+    // astro:page-load fires on the initial load AND after every client-router
+    // navigation; only wire when this page's scenes are actually in the DOM.
+    document.addEventListener('astro:page-load', () => {
+      if (document.querySelector('[data-scene]')) initScenes();
+    });
   </script>
 </Base>

@@ -122,21 +122,23 @@ import Base from '../layouts/Base.astro';
     import { onKernel, type AstridBridge } from '../scripts/kernel';
     import { installGuest, type GuestHandle, type GuestLogEntry } from '../scripts/guest-runtime';
 
-    const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+    const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T | null;
+
+    // Module state survives client-router navigations (the guest keeps
+    // running while you read the book); the DOM does not. wire() re-binds
+    // everything on each visit, and the feeds re-render from module logs.
 
     // ---- tabs ----
-    const tabAuthor = $('tab-author');
-    const tabShowcase = $('tab-showcase');
-    const panelAuthor = $('panel-author');
-    const panelShowcase = $('panel-showcase');
+    let activeTab: 'author' | 'showcase' = 'author';
     function pick(tab: 'author' | 'showcase'): void {
-      tabAuthor.classList.toggle('is-active', tab === 'author');
-      tabShowcase.classList.toggle('is-active', tab === 'showcase');
-      panelAuthor.hidden = tab !== 'author';
-      panelShowcase.hidden = tab !== 'showcase';
+      activeTab = tab;
+      $('tab-author')?.classList.toggle('is-active', tab === 'author');
+      $('tab-showcase')?.classList.toggle('is-active', tab === 'showcase');
+      const a = $('panel-author');
+      const s = $('panel-showcase');
+      if (a) a.hidden = tab !== 'author';
+      if (s) s.hidden = tab !== 'showcase';
     }
-    tabAuthor.addEventListener('click', () => pick('author'));
-    tabShowcase.addEventListener('click', () => pick('showcase'));
 
     // ---- editor ----
     const DEFAULT_SOURCE = `// Your capsule. It runs in a worker in this tab,
@@ -155,21 +157,31 @@ async function on_event(topic, payload) {
 }
 `;
 
-    const editor = new EditorView({
-      parent: $('editor'),
-      doc: DEFAULT_SOURCE,
-      extensions: [basicSetup, javascript(), oneDark, EditorView.lineWrapping],
-    });
+    let editor: EditorView | null = null;
+    let editorDoc = DEFAULT_SOURCE;
 
-    // ---- feeds ----
+    // ---- feeds (module logs, re-rendered per visit) ----
     const FEED_MAX = 40;
+    const feedLogs = new Map<string, { cls: string; text: string }[]>();
     function push(listId: string, cls: string, text: string): void {
-      const ul = $(listId) as unknown as HTMLUListElement;
-      const li = document.createElement('li');
-      li.className = cls;
-      li.textContent = text;
-      ul.append(li);
-      while (ul.children.length > FEED_MAX) ul.firstChild?.remove();
+      const log = feedLogs.get(listId) ?? [];
+      feedLogs.set(listId, log);
+      log.push({ cls, text });
+      while (log.length > FEED_MAX) log.shift();
+      renderFeed(listId);
+    }
+    function renderFeed(listId: string): void {
+      const ul = $(listId) as HTMLUListElement | null;
+      if (!ul) return;
+      const log = feedLogs.get(listId) ?? [];
+      ul.replaceChildren(
+        ...log.map(({ cls, text }) => {
+          const li = document.createElement('li');
+          li.className = cls;
+          li.textContent = text;
+          return li;
+        }),
+      );
       ul.scrollTop = ul.scrollHeight;
     }
     const stamp = (d: Date) => d.toLocaleTimeString(undefined, { hour12: false });
@@ -185,18 +197,26 @@ async function on_event(topic, payload) {
     let tick = 0;
     let busWired = false;
 
-    const btnInstall = $('btn-install') as HTMLButtonElement;
-    const btnShowcase = $('btn-showcase') as HTMLButtonElement;
+    function applyButtons(): void {
+      const btnInstall = $('btn-install') as HTMLButtonElement | null;
+      const btnShowcase = $('btn-showcase') as HTMLButtonElement | null;
+      const hasGuestApi = typeof bridge?.guestKvSet === 'function';
+      const hasShims = typeof bridge?.hostSubscribeQueue === 'function';
+      if (btnInstall) {
+        btnInstall.disabled = !hasGuestApi;
+        btnInstall.textContent = guest ? 'uninstall capsule' : 'install capsule';
+      }
+      if (btnShowcase) btnShowcase.disabled = !hasShims;
+      const state = $('rig-state');
+      if (state) state.textContent = guest ? `${guest.principal} running` : 'nothing installed';
+    }
 
     onKernel((status, b) => {
-      $('pg-offline').hidden = status !== 'offline';
+      const off = $('pg-offline');
+      if (off) off.hidden = status !== 'offline';
       if (status !== 'online' || !b) return;
       bridge = b;
-      const hasGuestApi = typeof b.guestKvSet === 'function';
-      const hasShims = typeof b.hostSubscribeQueue === 'function';
-      btnInstall.disabled = !hasGuestApi;
-      btnShowcase.disabled = !hasShims;
-      if (!hasGuestApi) {
+      if (typeof b.guestKvSet !== 'function') {
         push('guest-feed', 'k-error', 'bridge predates the playground surface; rebuild kernel-web');
       }
       if (!busWired) {
@@ -205,6 +225,7 @@ async function on_event(topic, payload) {
           push('bus-feed', 'k-host', `${topic} ${json}`);
         });
       }
+      applyButtons();
       void refreshLedger();
     });
 
@@ -212,9 +233,10 @@ async function on_event(topic, payload) {
       if (!bridge?.auditTail || !bridge.auditLen) return;
       try {
         const [tailJson, len] = await Promise.all([bridge.auditTail(8), bridge.auditLen()]);
-        $('ledger-title').innerHTML =
-          `audit ledger <span class="dim">${len} entries, hash-linked</span>`;
-        const ul = $('ledger') as unknown as HTMLUListElement;
+        const title = $('ledger-title');
+        const ul = $('ledger') as HTMLUListElement | null;
+        if (!title || !ul) return;
+        title.innerHTML = `audit ledger <span class="dim">${len} entries, hash-linked</span>`;
         ul.replaceChildren();
         const entries = JSON.parse(tailJson) as { hash: string; action: string }[];
         for (const e of entries) {
@@ -229,10 +251,10 @@ async function on_event(topic, payload) {
     }
 
     // ---- install / uninstall ----
-    btnInstall.addEventListener('click', () => void toggleInstall());
     async function toggleInstall(): Promise<void> {
       if (!bridge) return;
-      btnInstall.disabled = true;
+      const btnInstall = $('btn-install') as HTMLButtonElement | null;
+      if (btnInstall) btnInstall.disabled = true;
       try {
         if (guest) {
           await stopGuest();
@@ -242,6 +264,7 @@ async function on_event(topic, payload) {
             .split(',')
             .map((s) => s.trim())
             .filter(Boolean);
+          if (editor) editorDoc = editor.state.doc.toString();
           guest = await installGuest(
             bridge,
             {
@@ -255,15 +278,15 @@ async function on_event(topic, payload) {
                   : [],
               },
             },
-            editor.state.doc.toString(),
+            editorDoc,
             (e) => {
               onGuestLog(e);
               if (e.kind === 'deny' || e.kind === 'host') void refreshLedger();
             },
           );
-          $('rig-state').textContent = `${guest.principal} running`;
-          btnInstall.textContent = 'uninstall capsule';
-          // Page-owned traffic generator: real publishes the guest can react to.
+          // Page-owned traffic generator: real publishes the guest can react
+          // to. Runs until uninstall, even while you visit other pages: the
+          // guest genuinely keeps working in the persistent kernel.
           trafficTimer = setInterval(() => {
             void bridge?.publish('site.v1.demo.tick', JSON.stringify({ n: ++tick }));
           }, 2500);
@@ -276,7 +299,9 @@ async function on_event(topic, payload) {
         });
         if (guest) await stopGuest();
       } finally {
-        btnInstall.disabled = false;
+        const btn = $('btn-install') as HTMLButtonElement | null;
+        if (btn) btn.disabled = false;
+        applyButtons();
       }
     }
     async function stopGuest(): Promise<void> {
@@ -284,8 +309,7 @@ async function on_event(topic, payload) {
       trafficTimer = null;
       await guest?.uninstall();
       guest = null;
-      $('rig-state').textContent = 'nothing installed';
-      btnInstall.textContent = 'install capsule';
+      applyButtons();
       void refreshLedger();
     }
 
@@ -295,12 +319,12 @@ async function on_event(topic, payload) {
     // accumulate.
     let assembled: string | null = null;
     let responseWatcher = false;
-    btnShowcase.addEventListener('click', () => void runShowcase());
     async function runShowcase(): Promise<void> {
       if (!bridge) return;
-      btnShowcase.disabled = true;
+      const btnShowcase = $('btn-showcase') as HTMLButtonElement | null;
+      if (btnShowcase) btnShowcase.disabled = true;
       const verdict = $('showcase-verdict');
-      verdict.textContent = 'instantiating the component…';
+      if (verdict) verdict.textContent = 'instantiating the component…';
       try {
         const [{ instantiate }, { createLiveHost }] = await Promise.all([
           import('../showcase/prompt-builder.component.js'),
@@ -333,30 +357,66 @@ async function on_event(topic, payload) {
           new TextEncoder().encode(JSON.stringify(request)),
         );
 
-        const ul = $('showcase-journal') as unknown as HTMLUListElement;
-        ul.replaceChildren();
-        for (const c of journal) {
-          const li = document.createElement('li');
-          li.className = 'k-host';
-          li.textContent = `#${c.seq} ${c.iface.replace('astrid:', '')}#${c.fn} ${c.detail}`;
-          ul.append(li);
+        const ul = $('showcase-journal') as HTMLUListElement | null;
+        if (ul) {
+          ul.replaceChildren();
+          for (const c of journal) {
+            const li = document.createElement('li');
+            li.className = 'k-host';
+            li.textContent = `#${c.seq} ${c.iface.replace('astrid:', '')}#${c.fn} ${c.detail}`;
+            ul.append(li);
+          }
         }
 
         // Bus delivery rides the microtask queue; give it one frame.
         await new Promise((r) => setTimeout(r, 50));
-        $('showcase-out').textContent = assembled
-          ? JSON.stringify(JSON.parse(assembled), null, 2)
-          : '(no response event observed)';
-        verdict.textContent = result?.action
-          ? `capsule returned "${result.action}" · ${journal.length} real host calls`
-          : 'capsule ran but returned nothing recognizable';
+        const out = $('showcase-out');
+        if (out) {
+          out.textContent = assembled
+            ? JSON.stringify(JSON.parse(assembled), null, 2)
+            : '(no response event observed)';
+        }
+        const v = $('showcase-verdict');
+        if (v) {
+          v.textContent = result?.action
+            ? `capsule returned "${result.action}" · ${journal.length} real host calls`
+            : 'capsule ran but returned nothing recognizable';
+        }
       } catch (err) {
-        verdict.textContent = `failed: ${err instanceof Error ? err.message : String(err)}`;
+        const v = $('showcase-verdict');
+        if (v) v.textContent = `failed: ${err instanceof Error ? err.message : String(err)}`;
         console.error('[astrid] showcase failed:', err);
       } finally {
-        btnShowcase.disabled = false;
+        const btn = $('btn-showcase') as HTMLButtonElement | null;
+        if (btn) btn.disabled = false;
       }
     }
+
+    // ---- per-visit wiring ----
+    function wire(): void {
+      const host = $('editor');
+      if (!host) return; // not on the playground page
+      host.replaceChildren();
+      editor = new EditorView({
+        parent: host,
+        doc: editorDoc,
+        extensions: [basicSetup, javascript(), oneDark, EditorView.lineWrapping],
+      });
+      $('tab-author')?.addEventListener('click', () => pick('author'));
+      $('tab-showcase')?.addEventListener('click', () => pick('showcase'));
+      $('btn-install')?.addEventListener('click', () => void toggleInstall());
+      $('btn-showcase')?.addEventListener('click', () => void runShowcase());
+      pick(activeTab);
+      renderFeed('guest-feed');
+      renderFeed('bus-feed');
+      applyButtons();
+      void refreshLedger();
+    }
+    document.addEventListener('astro:page-load', wire);
+    // Keep the visitor's source across navigations away and back.
+    document.addEventListener('astro:before-swap', () => {
+      if (editor) editorDoc = editor.state.doc.toString();
+    });
   </script>
 
   <style>

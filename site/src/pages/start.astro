@@ -1,0 +1,205 @@
+---
+import Base from '../layouts/Base.astro';
+
+/** The developer entrance. The homepage speaks human; this page speaks
+ *  terminal. Every command here is real and verified against the CLI. */
+
+const useIt = [
+  { cmd: 'brew install unicity-astrid/tap/astrid', note: 'macOS · or: cargo install astrid' },
+  { cmd: 'astrid init', note: 'pick a distro and a provider; keys go to the secret store, never flags' },
+  { cmd: 'astrid doctor', note: 'plain pass/fail: daemon up, capsules ready, provider reachable' },
+  { cmd: 'astrid chat', note: 'talk to an agent that can actually do things' },
+];
+
+const buildIt = [
+  { cmd: 'astrid capsule new my-tool', note: 'scaffolds a complete capsule that compiles first try' },
+  { cmd: 'astrid capsule build', note: 'cargo compile → component wrap → signed .capsule' },
+  { cmd: 'astrid capsule check', note: 'static linter: advertised tools vs actual routing' },
+  { cmd: 'astrid capsule install ./my-tool', note: 'live-load it; the running OS gains the skill' },
+];
+---
+
+<Base
+  title="Start building on Astrid"
+  description="Install Astrid, talk to an agent, then write a capsule and install it live. Real commands, no filler."
+>
+  <main class="start wrap">
+    <header class="start-head">
+      <p class="eyebrow">start building</p>
+      <h1>Two paths. Both short.</h1>
+      <p class="prose dim start-lede">
+        Use it: an agent on your machine in four commands. Build on it: your
+        own capsule, installed live, in four more. If you only want to feel
+        what Astrid is first, the <a href="/playground/">playground</a> runs
+        the real kernel in this tab, nothing to install.
+      </p>
+    </header>
+
+    <div class="start-grid">
+      <section class="card start-col" data-dock="use it">
+        <p class="mono start-col-title">path 1 · use it</p>
+        <ol class="start-steps">
+          {
+            useIt.map((s, i) => (
+              <li>
+                <span class="mono start-n">{String(i + 1).padStart(2, '0')}</span>
+                <div>
+                  <code class="start-cmd mono">{s.cmd}</code>
+                  <p class="dim start-note">{s.note}</p>
+                </div>
+              </li>
+            ))
+          }
+        </ol>
+        <p class="start-more dim">
+          Full walk-through, including what to look at underneath:
+          <a href="/book/getting-started/see-it-work/">Getting Started: See It Work</a>
+        </p>
+      </section>
+
+      <section class="card start-col" data-dock="build on it">
+        <p class="mono start-col-title">path 2 · build on it</p>
+        <ol class="start-steps">
+          {
+            buildIt.map((s, i) => (
+              <li>
+                <span class="mono start-n">{String(i + 1).padStart(2, '0')}</span>
+                <div>
+                  <code class="start-cmd mono">{s.cmd}</code>
+                  <p class="dim start-note">{s.note}</p>
+                </div>
+              </li>
+            ))
+          }
+        </ol>
+        <p class="start-more dim">
+          The scaffold ships an <code>AUTHORING.md</code> beside your code.
+          Deeper: <a href="/book/capsule-model/designing-capsules/">Designing Capsules</a>
+          and <a href="/book/host-abi/the-syscall-surface/">the host ABI</a>.
+        </p>
+      </section>
+    </div>
+
+    <section class="start-links">
+      <a class="card start-link" href="/playground/">
+        <span class="mono start-link-k">no install</span>
+        <span>Write a capsule in this tab, against the kernel running on this page</span>
+      </a>
+      <a class="card start-link" href="/book/">
+        <span class="mono start-link-k">the book</span>
+        <span>How the whole machine works, part by part</span>
+      </a>
+      <a class="card start-link" href="https://github.com/unicity-astrid">
+        <span class="mono start-link-k">github</span>
+        <span>The kernel, the SDK, the capsules, the RFCs. All of it.</span>
+      </a>
+    </section>
+  </main>
+</Base>
+
+<style>
+  .start {
+    padding-block: calc(var(--s-6) + 2rem) var(--s-7);
+  }
+
+  .start-head h1 {
+    font-family: var(--font-display);
+    font-size: var(--step-4);
+    letter-spacing: -0.02em;
+    margin-block: var(--s-2) var(--s-3);
+  }
+
+  .start-lede {
+    max-width: 60ch;
+  }
+
+  .start-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--s-3);
+    margin-block: var(--s-5);
+  }
+
+  @media (max-width: 860px) {
+    .start-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .start-col-title {
+    font-size: var(--step--1);
+    color: var(--capsule);
+    margin-bottom: var(--s-3);
+    letter-spacing: 0.08em;
+  }
+
+  .start-steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: var(--s-3);
+  }
+
+  .start-steps li {
+    display: flex;
+    gap: var(--s-2);
+    align-items: baseline;
+  }
+
+  .start-n {
+    color: var(--text-faint);
+    font-size: var(--step--1);
+    flex: none;
+  }
+
+  .start-cmd {
+    display: block;
+    font-size: var(--step--1);
+    color: var(--bus);
+    overflow-wrap: anywhere;
+  }
+
+  .start-note {
+    font-size: var(--step--1);
+    margin-top: 0.25em;
+  }
+
+  .start-more {
+    margin-top: var(--s-3);
+    font-size: var(--step--1);
+    line-height: 1.6;
+  }
+
+  .start-links {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--s-3);
+  }
+
+  @media (max-width: 860px) {
+    .start-links {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .start-link {
+    display: grid;
+    gap: 0.5rem;
+    color: var(--text);
+    font-size: var(--step--1);
+    line-height: 1.5;
+  }
+
+  .start-link:hover {
+    text-decoration: none;
+    border-color: var(--capsule);
+  }
+
+  .start-link-k {
+    color: var(--capsule);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+</style>

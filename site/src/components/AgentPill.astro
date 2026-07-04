@@ -14,15 +14,17 @@
   <div class="pill-status mono" id="pill-status" hidden></div>
   <div class="pill-panel card" id="pill-panel" hidden>
     <div class="pill-results" id="pill-results"></div>
+    <div class="pill-progress" id="pill-progress" hidden>
+      <div class="pill-progress-bar" id="pill-progress-bar"></div>
+    </div>
     <p class="pill-mode mono" id="pill-mode">
-      docs lens: this finds chapters, it does not think.
-      <button class="pill-enable mono" id="pill-enable" type="button">
-        enable local agent
-      </button>
+      docs lens: this finds chapters, it does not think. the button on the
+      right turns on a real AI that runs entirely in your tab.
     </p>
     <p class="pill-consent mono" id="pill-consent" hidden>
       the agent runs entirely in your tab (WebGPU) and downloads roughly half
-      a gigabyte of model weights, once. nothing you type leaves this page.
+      a gigabyte of model weights, once; your browser caches them, so it is a
+      one-time wait. nothing you type ever leaves this page.
       <button class="pill-enable mono" id="pill-confirm" type="button">download and run</button>
       <button class="pill-enable mono" id="pill-cancel" type="button">cancel</button>
     </p>
@@ -37,6 +39,9 @@
       autocomplete="off"
       maxlength="200"
     />
+    <button class="pill-ai mono" id="pill-enable" type="button" title="Run a local AI in this tab">
+      ✦ enable AI
+    </button>
     <button class="pill-send mono" type="submit" aria-label="Ask">→</button>
   </form>
 </div>
@@ -100,6 +105,45 @@
 
   .pill-input::placeholder {
     color: var(--text-faint);
+  }
+
+  .pill-ai {
+    flex: none;
+    background: color-mix(in srgb, var(--capsule) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--capsule) 45%, transparent);
+    border-radius: 999px;
+    color: var(--capsule);
+    font: inherit;
+    font-size: 0.72rem;
+    padding: 0.35em 0.8em;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .pill-ai:hover {
+    border-color: var(--capsule);
+  }
+
+  .pill-ai[data-on='true'] {
+    color: var(--grant);
+    background: color-mix(in srgb, var(--grant) 12%, transparent);
+    border-color: color-mix(in srgb, var(--grant) 40%, transparent);
+    cursor: default;
+  }
+
+  .pill-progress {
+    height: 3px;
+    border-radius: 2px;
+    background: var(--line);
+    overflow: hidden;
+    margin-top: var(--s-2);
+  }
+
+  .pill-progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--capsule);
+    transition: width 0.3s ease;
   }
 
   .pill-send {
@@ -226,6 +270,10 @@
     bridge = b;
     wrap.hidden = false;
     startNavContext(b);
+    // Prior opt-in: bring the agent straight back from the weight cache.
+    if (localStorage.getItem('astrid-agent-optin') === '1' && webGpuAvailable() && agentState() === 'off') {
+      startEngine(true);
+    }
     // The pill renders agent status from the same bus events everyone else
     // sees; the status line IS the event stream.
     b.subscribe('site.agent.v1.status', (_t, json) => {
@@ -284,9 +332,49 @@
     });
   });
 
-  $('pill-enable').addEventListener('click', () => {
+  // Opt-in is remembered: once you have enabled the agent, a hard reload
+  // restores it straight from the browser's weight cache without re-asking.
+  const OPTIN_KEY = 'astrid-agent-optin';
+  const chip = $('pill-enable');
+  const progressWrap = $('pill-progress');
+  const progressBar = $('pill-progress-bar');
+
+  function startEngine(restoring: boolean): void {
+    if (!bridge) return;
+    consent.hidden = true;
+    showPanel();
+    progressWrap.hidden = false;
+    mode.textContent = restoring
+      ? 'restoring the model from your browser cache…'
+      : 'starting download…';
+    mode.hidden = false;
+    chip.textContent = '✦ loading…';
+    void enableAgent(bridge, (text, progress) => {
+      mode.textContent = text;
+      progressBar.style.width = `${Math.round(progress * 100)}%`;
+    }).then((ok) => {
+      progressWrap.hidden = true;
+      if (ok) {
+        localStorage.setItem(OPTIN_KEY, '1');
+        chip.dataset.on = 'true';
+        chip.textContent = '✦ AI on';
+        input.placeholder = 'ask the agent…';
+        mode.textContent =
+          'local agent running in your tab. answers are grounded in the book and it travels with you across pages.';
+      } else {
+        chip.textContent = '✦ enable AI';
+        mode.textContent = 'model load failed; the docs lens still works.';
+      }
+    });
+  }
+
+  chip.addEventListener('click', () => {
+    const s = agentState();
+    if (s === 'ready' || s === 'loading') return;
+    showPanel();
     if (!webGpuAvailable()) {
-      mode.textContent = 'local agent needs WebGPU; this browser does not offer it. The docs lens still works.';
+      mode.textContent =
+        'the local agent needs WebGPU, which this browser does not offer. the docs lens still works.';
       return;
     }
     mode.hidden = true;
@@ -296,19 +384,7 @@
     consent.hidden = true;
     mode.hidden = false;
   });
-  $('pill-confirm').addEventListener('click', () => {
-    if (!bridge) return;
-    consent.hidden = true;
-    mode.textContent = 'starting download…';
-    mode.hidden = false;
-    void enableAgent(bridge, (text) => {
-      mode.textContent = text;
-    }).then((ok) => {
-      mode.textContent = ok
-        ? 'local agent running in your tab. answers are grounded in the book.'
-        : 'model load failed; the docs lens still works.';
-    });
-  });
+  $('pill-confirm').addEventListener('click', () => startEngine(false));
 
   $('pill-form').addEventListener('submit', (e) => {
     e.preventDefault();

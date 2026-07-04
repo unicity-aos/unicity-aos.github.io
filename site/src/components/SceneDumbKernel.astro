@@ -82,58 +82,79 @@
 </style>
 
 <script>
-  import { onKernel, kernel } from '../scripts/kernel';
+  import { onKernel, kernel, kernelStatus } from '../scripts/kernel';
   import { capsuleState, onSectionCapsules } from '../scripts/section-capsules';
 
-  const caption = document.getElementById('dk-caption')!;
-  const offNote = document.getElementById('dk-off')!;
-  const count = document.getElementById('dk-count')!;
+  // Module state survives client-router navigations; elements do not. All
+  // DOM refs are looked up at use time, and wire() re-arms per page visit.
   let seen = 0;
   let n = 0;
   let timer: number | undefined;
+  let io: IntersectionObserver | null = null;
+  let subscribed = false;
+
+  function applyState(): void {
+    const caption = document.getElementById('dk-caption');
+    const offNote = document.getElementById('dk-off');
+    const count = document.getElementById('dk-count');
+    if (caption) caption.hidden = kernelStatus() !== 'online';
+    // Only flag the uninstalled state when the capsule system is actually
+    // present in this build; 'unavailable' keeps the old caption honest.
+    if (offNote) offNote.hidden = capsuleState('site-pulse') !== 'uninstalled';
+    if (count) count.textContent = String(seen);
+  }
 
   // The page is the clock (a sandboxed guest has no timer authority): real
   // tick publishes while the scene is visible. The ROUTING lives in the
-  // site-pulse capsule; the counter below only moves when site-pulse turns a
-  // tick into site.v1.demo.route. Uninstall it and this element goes quiet.
-  const section = document.getElementById('dumb-kernel')!;
-  const io = new IntersectionObserver((entries) => {
-    const on = entries[0]?.isIntersecting ?? false;
-    if (on && timer === undefined) {
-      timer = window.setInterval(() => {
-        const bridge = kernel();
-        if (!bridge) return;
-        // Builds without the capsule assets fall back to routing directly
-        // (still a real publish); with site-pulse present, the capsule owns
-        // the routing and uninstalling it genuinely silences this scene.
-        if (capsuleState('site-pulse') === 'unavailable') {
-          void bridge.publish(
-            'site.v1.demo.route',
-            JSON.stringify({ scene: 'dumb-kernel', via: 'page' }),
-          );
-        } else {
-          void bridge.publish('site.v1.clock.tick', JSON.stringify({ n: ++n }));
-        }
-      }, 2600);
-    } else if (!on && timer !== undefined) {
+  // site-pulse capsule; the counter only moves when site-pulse turns a tick
+  // into site.v1.demo.route. Uninstall it and this element goes quiet.
+  function wire(): void {
+    if (timer !== undefined) {
       clearInterval(timer);
       timer = undefined;
     }
-  });
-  io.observe(section);
+    io?.disconnect();
+    io = null;
+    const section = document.getElementById('dumb-kernel');
+    if (!section) return;
+    io = new IntersectionObserver((entries) => {
+      const on = entries[0]?.isIntersecting ?? false;
+      if (on && timer === undefined) {
+        timer = window.setInterval(() => {
+          const bridge = kernel();
+          if (!bridge) return;
+          // Builds without the capsule assets fall back to routing directly
+          // (still a real publish); with site-pulse present, the capsule
+          // owns the routing.
+          if (capsuleState('site-pulse') === 'unavailable') {
+            void bridge.publish(
+              'site.v1.demo.route',
+              JSON.stringify({ scene: 'dumb-kernel', via: 'page' }),
+            );
+          } else {
+            void bridge.publish('site.v1.clock.tick', JSON.stringify({ n: ++n }));
+          }
+        }, 2600);
+      } else if (!on && timer !== undefined) {
+        clearInterval(timer);
+        timer = undefined;
+      }
+    });
+    io.observe(section);
+    applyState();
+  }
 
   onKernel((status, bridge) => {
-    if (status !== 'online' || !bridge) return;
-    caption.hidden = false;
-    bridge.subscribe('site.v1.demo.*', () => {
-      seen += 1;
-      count.textContent = String(seen);
-    });
+    if (status === 'online' && bridge && !subscribed) {
+      subscribed = true;
+      bridge.subscribe('site.v1.demo.*', () => {
+        seen += 1;
+        const count = document.getElementById('dk-count');
+        if (count) count.textContent = String(seen);
+      });
+    }
+    applyState();
   });
-
-  onSectionCapsules(() => {
-    // Only flag the uninstalled state when the capsule system is actually
-    // present in this build; 'unavailable' keeps the old caption honest.
-    offNote.hidden = capsuleState('site-pulse') !== 'uninstalled';
-  });
+  onSectionCapsules(applyState);
+  document.addEventListener('astro:page-load', wire);
 </script>

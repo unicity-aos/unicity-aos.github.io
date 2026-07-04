@@ -13,6 +13,7 @@
 <span class="dim">$</span> astrid start</code></pre>
     </div>
     <nav class="start-links mono" aria-label="Project links">
+      <a href="/start/">start building →</a>
       <a href="https://github.com/unicity-astrid/astrid">github.com/unicity-astrid</a>
       <a href="https://github.com/unicity-astrid/rfcs">the RFCs</a>
       <a href="https://github.com/unicity-astrid/sdk-rust">capsule SDK (Rust)</a>
@@ -95,13 +96,17 @@
 <script>
   import { onKernel, kernel } from '../scripts/kernel';
 
-  // the footer wordmark quietly counts real routed events; a signature, not a widget
-  const el = document.getElementById('footer-live')!;
+  // the footer wordmark quietly counts real routed events; a signature, not a
+  // widget. One module-lifetime interval, re-finding its element every tick,
+  // so navigations neither stack timers nor strand a stale node.
+  let ticking = false;
   onKernel((status) => {
-    if (status !== 'online') return;
+    if (status !== 'online' || ticking) return;
+    ticking = true;
     setInterval(() => {
+      const el = document.getElementById('footer-live');
       const bridge = kernel();
-      if (bridge) el.textContent = `ASTRID · ${bridge.eventsRouted()} EVENTS ROUTED IN YOUR TAB`;
+      if (el && bridge) el.textContent = `ASTRID · ${bridge.eventsRouted()} EVENTS ROUTED IN YOUR TAB`;
     }, 2000);
   });
 </script>

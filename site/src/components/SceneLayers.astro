@@ -165,25 +165,48 @@
   import { onKernel, type AstridBridge } from '../scripts/kernel';
   import { capsuleState, onSectionCapsules } from '../scripts/section-capsules';
 
-  const input = document.getElementById('layers-input') as HTMLInputElement;
-  const send = document.getElementById('layers-send') as HTMLButtonElement;
-  const form = document.getElementById('layers-form') as HTMLFormElement;
-  const feed = document.getElementById('layers-feed') as HTMLUListElement;
-
+  // Module state (the conversation log, bus subscriptions) survives
+  // client-router navigations; the DOM does not. wire() re-binds per visit
+  // and re-renders the log, so leaving and returning keeps the transcript.
   let bridge: AstridBridge | null = null;
+  let subscribed = false;
+  const log: { cls: string; text: string }[] = [];
 
   function push(cls: string, text: string): void {
-    const li = document.createElement('li');
-    li.className = cls;
-    li.textContent = text;
-    feed.append(li);
-    while (feed.children.length > 24) feed.firstChild?.remove();
+    log.push({ cls, text });
+    while (log.length > 24) log.shift();
+    render();
+  }
+
+  function render(): void {
+    const feed = document.getElementById('layers-feed');
+    if (!feed) return;
+    feed.replaceChildren(
+      ...log.map(({ cls, text }) => {
+        const li = document.createElement('li');
+        li.className = cls;
+        li.textContent = text;
+        return li;
+      }),
+    );
     feed.scrollTop = feed.scrollHeight;
+  }
+
+  function applyState(): void {
+    const input = document.getElementById('layers-input') as HTMLInputElement | null;
+    const send = document.getElementById('layers-send') as HTMLButtonElement | null;
+    if (!input || !send) return;
+    const ready = capsuleState('site-guard') !== 'unavailable';
+    input.disabled = !ready || !bridge;
+    send.disabled = input.disabled;
   }
 
   onKernel((status, b) => {
     if (status !== 'online' || !b) return;
     bridge = b;
+    applyState();
+    if (subscribed) return;
+    subscribed = true;
     b.subscribe('site.v1.guard.blocked', (_t, json) => {
       try {
         const { reason, redacted } = JSON.parse(json) as { reason: string; redacted: string };
@@ -205,21 +228,27 @@
   onSectionCapsules(() => {
     const guardOn = capsuleState('site-guard') === 'installed';
     const echoOn = capsuleState('site-echo') === 'installed';
-    const ready = capsuleState('site-guard') !== 'unavailable';
-    input.disabled = !ready || !bridge;
-    send.disabled = input.disabled;
-    if (ready && !guardOn && echoOn) {
+    applyState();
+    if (capsuleState('site-guard') !== 'unavailable' && !guardOn && echoOn) {
       push('l-note', 'the guard is uninstalled: your raw input now reaches nobody. echo only listens to the guarded topic.');
     }
   });
 
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const text = input.value.trim();
-    if (!text || !bridge) return;
-    push('l-you', `you: ${text}`);
-    void bridge.publish('site.v1.input.text', JSON.stringify({ text }));
-    input.value = '';
-    input.focus();
-  });
+  function wire(): void {
+    const form = document.getElementById('layers-form') as HTMLFormElement | null;
+    const input = document.getElementById('layers-input') as HTMLInputElement | null;
+    if (!form || !input) return;
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (!text || !bridge) return;
+      push('l-you', `you: ${text}`);
+      void bridge.publish('site.v1.input.text', JSON.stringify({ text }));
+      input.value = '';
+      input.focus();
+    });
+    render();
+    applyState();
+  }
+  document.addEventListener('astro:page-load', wire);
 </script>

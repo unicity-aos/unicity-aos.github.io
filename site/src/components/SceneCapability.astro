@@ -205,33 +205,51 @@
 </style>
 
 <script>
-  import { onKernel } from '../scripts/kernel';
+  import { onKernel, kernel, kernelStatus } from '../scripts/kernel';
   import type { AstridBridge } from '../scripts/kernel';
 
   const PRINCIPAL = 'site-visitor';
-  const result = document.getElementById('cap-result')!;
-  const ledger = document.getElementById('cap-ledger')!;
-  const buttons = Array.from(
-    document.querySelectorAll<HTMLButtonElement>('#cap-card .cap-btn'),
-  );
-  buttons.forEach((b) => (b.disabled = true));
+
+  // Module state survives client-router navigations; the buttons and ledger
+  // do not. The store is seeded ONCE per kernel (the kernel itself persists
+  // across pages now); wire() re-binds fresh elements on every visit.
+  let armed = false;
+  let writeGranted = false;
+  let lastResult: { kind: string; text: string } | null = null;
 
   onKernel((status, bridge) => {
-    if (status === 'online' && bridge) {
-      void arm(bridge);
+    if (status === 'online' && bridge && !armed) {
+      armed = true;
+      // Seed the demo policy in the REAL store: notes readable; nothing
+      // else. "write ~/notes" is granted on first use to show the flow.
+      void bridge.grant(PRINCIPAL, '/home/notes', 'read').then(() => {
+        lastResult ??= {
+          kind: '',
+          text: 'capability store armed · notes-agent holds: read ~/notes',
+        };
+        wire();
+      });
     } else if (status === 'offline') {
-      result.textContent = 'kernel offline in this browser; demo unavailable (never faked)';
+      const result = document.getElementById('cap-result');
+      if (result) result.textContent = 'kernel offline in this browser; demo unavailable (never faked)';
     }
   });
 
-  async function arm(bridge: AstridBridge): Promise<void> {
-    // Seed the demo policy in the REAL store: notes readable; nothing else.
-    // "write ~/notes" is granted on first use to show the grant flow.
-    await bridge.grant(PRINCIPAL, '/home/notes', 'read');
-    buttons.forEach((b) => (b.disabled = false));
-    result.textContent = 'capability store armed · notes-agent holds: read ~/notes';
+  function wire(): void {
+    const result = document.getElementById('cap-result');
+    const buttons = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('#cap-card .cap-btn'),
+    );
+    if (!result || !buttons.length) return;
+    const bridge = kernel();
+    const ready = armed && kernelStatus() === 'online' && bridge !== null;
+    buttons.forEach((b) => (b.disabled = !ready));
+    if (lastResult) {
+      result.dataset.kind = lastResult.kind;
+      result.textContent = lastResult.text;
+    }
+    if (!ready || !bridge) return;
 
-    let writeGranted = false;
     for (const btn of buttons) {
       btn.addEventListener('click', () => {
         void (async () => {
@@ -247,15 +265,20 @@
             note = ' (granted just now, with your approval)';
           }
           flash(btn, ok);
-          result.dataset.kind = ok ? 'grant' : 'deny';
-          result.textContent = ok
-            ? `GRANTED · ${perm} ${res}${note}`
-            : `DENIED · no capability covers ${perm} ${res}`;
+          lastResult = {
+            kind: ok ? 'grant' : 'deny',
+            text: ok
+              ? `GRANTED · ${perm} ${res}${note}`
+              : `DENIED · no capability covers ${perm} ${res}`,
+          };
+          result.dataset.kind = lastResult.kind;
+          result.textContent = lastResult.text;
           await stamp(bridge, ok, `${perm} ${res}`);
         })();
       });
     }
   }
+  document.addEventListener('astro:page-load', wire);
 
   function flash(btn: HTMLButtonElement, ok: boolean): void {
     btn.dataset.flash = ok ? 'grant' : 'deny';
@@ -263,6 +286,8 @@
   }
 
   async function stamp(bridge: AstridBridge, ok: boolean, what: string): Promise<void> {
+    const ledger = document.getElementById('cap-ledger');
+    if (!ledger) return;
     // With the audit read surface available, show the real hash-linked tail;
     // until then, log the real store decisions as they happen (no fake hashes).
     if (!bridge.auditTail) {
