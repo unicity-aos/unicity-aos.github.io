@@ -19,9 +19,13 @@
 //!   real `CapabilityStore` first, lands every allow/deny decision on the real
 //!   audit chain, and throws on denial — the thrown error is the enforcement.
 //! - The synchronous host shims (`host_publish`/`host_kv_get_sync`/
-//!   `host_kv_set_sync`/`host_subscribe_queue`) back a jco-transpiled capsule
-//!   whose `astrid:*` host imports are SYNCHRONOUS; they drive the same live
-//!   kernel bus/KV without an `.await`, with a drainable `SyncTopicQueue` for
+//!   `host_kv_set_sync`/`host_kv_delete_sync`/`host_kv_cas_sync`/
+//!   `host_kv_list_keys_sync`/`host_kv_clear_prefix_sync`/
+//!   `host_subscribe_queue`) back a jco-transpiled capsule whose `astrid:*`
+//!   host imports are SYNCHRONOUS; they drive the same live kernel bus/KV
+//!   without an `.await` — the KV surface widened to the full
+//!   delete/CAS/list-keys/clear-prefix set the real session + react capsules'
+//!   `astrid:kv/host` imports demand — with a drainable `SyncTopicQueue` for
 //!   the sync `Subscription.recv` import.
 //!
 //! [`KvStore`]: astrid_storage::KvStore
@@ -653,6 +657,116 @@ impl AstridWeb {
             Some(r) => r.map_err(|e| JsError::new(&format!("kv set failed: {e}"))),
             None => Err(JsError::new(
                 "sync KV path unavailable: store pended (set did not resolve on first poll)",
+            )),
+        }
+    }
+
+    /// Synchronously delete `(ns, key)` from the kernel KV, returning `true`
+    /// iff the key existed. Backs the `astrid:kv/host#kv-delete` import. See
+    /// [`host_kv_get_sync`] for the `now_or_never` rationale.
+    ///
+    /// [`host_kv_get_sync`]: AstridWeb::host_kv_get_sync
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsError` if the store pended (sync path unavailable) or the
+    /// KV delete fails.
+    #[wasm_bindgen(js_name = hostKvDeleteSync)]
+    pub fn host_kv_delete_sync(&self, ns: String, key: String) -> Result<bool, JsError> {
+        match self.kernel.kv.delete(&ns, &key).now_or_never() {
+            Some(r) => r.map_err(|e| JsError::new(&format!("kv delete failed: {e}"))),
+            None => Err(JsError::new(
+                "sync KV path unavailable: store pended (delete did not resolve on first poll)",
+            )),
+        }
+    }
+
+    /// Synchronously compare-and-swap `(ns, key)`: replace it with `new` iff its
+    /// current value matches `expected`. Backs the `astrid:kv/host#kv-cas`
+    /// import. See [`host_kv_get_sync`] for the `now_or_never` rationale.
+    ///
+    /// `expected: None` means "the key must currently be missing"
+    /// (insert-if-absent); `Some(s)` compares against `s` as UTF-8 bytes. `new`
+    /// is stored as UTF-8 bytes. Returns the trait's bool verbatim: `true` when
+    /// the swap happened, `false` when the compare failed — a failed compare is
+    /// NOT an error.
+    ///
+    /// [`host_kv_get_sync`]: AstridWeb::host_kv_get_sync
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsError` if the store pended (sync path unavailable) or the
+    /// CAS fails for a real I/O / validation reason (not the compare-failed
+    /// case).
+    #[wasm_bindgen(js_name = hostKvCasSync)]
+    pub fn host_kv_cas_sync(
+        &self,
+        ns: String,
+        key: String,
+        expected: Option<String>,
+        new: String,
+    ) -> Result<bool, JsError> {
+        let expected_bytes = expected.as_ref().map(String::as_bytes);
+        match self
+            .kernel
+            .kv
+            .compare_and_swap(&ns, &key, expected_bytes, new.into_bytes())
+            .now_or_never()
+        {
+            Some(r) => r.map_err(|e| JsError::new(&format!("kv cas failed: {e}"))),
+            None => Err(JsError::new(
+                "sync KV path unavailable: store pended (cas did not resolve on first poll)",
+            )),
+        }
+    }
+
+    /// Synchronously list keys in `ns`, optionally filtered by `prefix`. Backs
+    /// the `astrid:kv/host#kv-list-keys` import. See [`host_kv_get_sync`] for
+    /// the `now_or_never` rationale.
+    ///
+    /// `prefix: None` lists every key in the namespace; `Some(p)` lists only
+    /// keys starting with `p`.
+    ///
+    /// [`host_kv_get_sync`]: AstridWeb::host_kv_get_sync
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsError` if the store pended (sync path unavailable) or the
+    /// KV list fails.
+    #[wasm_bindgen(js_name = hostKvListKeysSync)]
+    pub fn host_kv_list_keys_sync(
+        &self,
+        ns: String,
+        prefix: Option<String>,
+    ) -> Result<Vec<String>, JsError> {
+        let fut = match &prefix {
+            None => self.kernel.kv.list_keys(&ns),
+            Some(p) => self.kernel.kv.list_keys_with_prefix(&ns, p),
+        };
+        match fut.now_or_never() {
+            Some(r) => r.map_err(|e| JsError::new(&format!("kv list keys failed: {e}"))),
+            None => Err(JsError::new(
+                "sync KV path unavailable: store pended (list-keys did not resolve on first poll)",
+            )),
+        }
+    }
+
+    /// Synchronously delete every key in `ns` matching `prefix`, returning the
+    /// number of keys removed. Backs the `astrid:kv/host#kv-clear-prefix`
+    /// import. See [`host_kv_get_sync`] for the `now_or_never` rationale.
+    ///
+    /// [`host_kv_get_sync`]: AstridWeb::host_kv_get_sync
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsError` if the store pended (sync path unavailable) or the
+    /// clear fails.
+    #[wasm_bindgen(js_name = hostKvClearPrefixSync)]
+    pub fn host_kv_clear_prefix_sync(&self, ns: String, prefix: String) -> Result<u64, JsError> {
+        match self.kernel.kv.clear_prefix(&ns, &prefix).now_or_never() {
+            Some(r) => r.map_err(|e| JsError::new(&format!("kv clear prefix failed: {e}"))),
+            None => Err(JsError::new(
+                "sync KV path unavailable: store pended (clear-prefix did not resolve on first poll)",
             )),
         }
     }

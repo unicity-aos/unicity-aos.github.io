@@ -37,10 +37,14 @@ export interface AstridBridge {
   /** Revoke a granted token by id (present only if the store supports it). */
   revoke?(tokenId: string): Promise<void>;
 
-  /** Synchronous shims backing the jco showcase's sync host imports. */
+  /** Synchronous shims backing the jco capsules' sync host imports. */
   hostPublish?(source: string, topic: string, json: string): void;
   hostKvGetSync?(ns: string, key: string): string | undefined;
   hostKvSetSync?(ns: string, key: string, val: string): void;
+  hostKvDeleteSync?(ns: string, key: string): boolean;
+  hostKvCasSync?(ns: string, key: string, expected: string | undefined, val: string): boolean;
+  hostKvListKeysSync?(ns: string, prefix: string | undefined): string[];
+  hostKvClearPrefixSync?(ns: string, prefix: string): bigint;
   hostSubscribeQueue?(pattern: string): SyncTopicQueue;
 }
 

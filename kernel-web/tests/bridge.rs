@@ -280,6 +280,83 @@ async fn sync_host_shims_round_trip_and_bound() -> Result<(), JsValue> {
 }
 
 #[wasm_bindgen_test]
+async fn sync_kv_surface_delete_cas_list_clear() -> Result<(), JsValue> {
+    let web = AstridWeb::boot().await?;
+
+    // Fixture: three keys in ns `fleet` via the existing sync set shim.
+    web.host_kv_set_sync("fleet".into(), "a.1".into(), "one".into())?;
+    web.host_kv_set_sync("fleet".into(), "a.2".into(), "two".into())?;
+    web.host_kv_set_sync("fleet".into(), "b.1".into(), "bee".into())?;
+
+    // --- list_keys: None lists all three; Some("a.") lists exactly the two ---
+    let mut all = web.host_kv_list_keys_sync("fleet".into(), None)?;
+    all.sort();
+    assert_eq!(all, vec!["a.1", "a.2", "b.1"], "list_keys(None) mismatch");
+
+    let mut a_keys = web.host_kv_list_keys_sync("fleet".into(), Some("a.".into()))?;
+    a_keys.sort();
+    assert_eq!(a_keys, vec!["a.1", "a.2"], "list_keys prefix mismatch");
+
+    // --- CAS: wrong expected -> Ok(false), value unchanged ---
+    let bad = web.host_kv_cas_sync(
+        "fleet".into(),
+        "a.1".into(),
+        Some("WRONG".into()),
+        "clobbered".into(),
+    )?;
+    assert!(!bad, "CAS with wrong expected must return false");
+    assert_eq!(
+        web.host_kv_get_sync("fleet".into(), "a.1".into())?
+            .as_deref(),
+        Some("one"),
+        "failed CAS must not mutate the value"
+    );
+
+    // --- CAS: correct expected -> Ok(true), value updated ---
+    let good = web.host_kv_cas_sync(
+        "fleet".into(),
+        "a.1".into(),
+        Some("one".into()),
+        "updated".into(),
+    )?;
+    assert!(good, "CAS with correct expected must return true");
+    assert_eq!(
+        web.host_kv_get_sync("fleet".into(), "a.1".into())?
+            .as_deref(),
+        Some("updated"),
+        "successful CAS must update the value"
+    );
+
+    // --- CAS insert-if-absent (expected: None): true first, false second ---
+    let inserted = web.host_kv_cas_sync("fleet".into(), "c.1".into(), None, "fresh".into())?;
+    assert!(inserted, "insert-if-absent must succeed on a fresh key");
+    let reinserted = web.host_kv_cas_sync("fleet".into(), "c.1".into(), None, "again".into())?;
+    assert!(
+        !reinserted,
+        "insert-if-absent must fail when the key already exists"
+    );
+
+    // --- delete: true then false ---
+    assert!(
+        web.host_kv_delete_sync("fleet".into(), "c.1".into())?,
+        "delete of an existing key must return true"
+    );
+    assert!(
+        !web.host_kv_delete_sync("fleet".into(), "c.1".into())?,
+        "delete of a missing key must return false"
+    );
+
+    // --- clear_prefix("a.") removes exactly a.1 + a.2 (2); only b.1 remains ---
+    // Fixture set at this point: a.1, a.2, b.1 (c.1 was deleted above).
+    let cleared = web.host_kv_clear_prefix_sync("fleet".into(), "a.".into())?;
+    assert_eq!(cleared, 2, "clear_prefix should remove the two a.* keys");
+    let remaining = web.host_kv_list_keys_sync("fleet".into(), None)?;
+    assert_eq!(remaining, vec!["b.1"], "only b.1 must remain after clear");
+
+    Ok(())
+}
+
+#[wasm_bindgen_test]
 async fn revoke_removes_the_capability() -> Result<(), JsValue> {
     let web = AstridWeb::boot().await?;
 

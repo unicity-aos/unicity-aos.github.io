@@ -76,6 +76,39 @@ export async function enableAgent(
 }
 
 /**
+ * Raw OpenAI-shaped completion for the fleet's provider shim: the real
+ * openai-compat capsule emits an OpenAI /v1/chat/completions request over
+ * astrid:http, and the page answers it from this engine instead of a
+ * network. Returns the full text (the capsule's SSE loop is synchronous, so
+ * the completion is generated first and fed to it as buffered chunks).
+ */
+export async function completeOpenAi(
+  bridge: AstridBridge,
+  messages: { role: string; content: string }[],
+  maxTokens: number,
+): Promise<string> {
+  if (!engine) throw new Error('local model not enabled');
+  publishStatus(bridge, 'thinking', 'fleet turn');
+  let full = '';
+  let n = 0;
+  const stream = await engine.chat.completions.create({
+    messages,
+    stream: true,
+    temperature: 0.3,
+    max_tokens: maxTokens,
+  });
+  for await (const chunk of stream) {
+    const t = chunk.choices[0]?.delta?.content ?? '';
+    if (!t) continue;
+    full += t;
+    n += 1;
+    if (n % 8 === 0) void bridge.publish('site.agent.v1.token', JSON.stringify({ n }));
+  }
+  publishStatus(bridge, 'ready', `generated ${n} tokens for the fleet`);
+  return full;
+}
+
+/**
  * Answer a question grounded in retrieved book chapters, streaming tokens.
  * `history` carries prior turns so the conversation is genuinely a session,
  * not a series of one-shots (most recent turns only; the model is small).

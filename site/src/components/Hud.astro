@@ -262,6 +262,7 @@
     onSectionCapsules,
     toggleCapsule,
   } from '../scripts/section-capsules';
+  import { FLEET, fleetState, onFleet, toggleFleetCapsule } from '../scripts/fleet-host';
 
   const $ = (id: string) => document.getElementById(id)!;
   const hud = $('hud');
@@ -334,36 +335,52 @@
   }
 
   // ---- section-capsule rack ----
+  function capsuleRow(
+    name: string,
+    blurb: string,
+    state: string,
+    onToggle: () => void,
+  ): HTMLLIElement {
+    const li = document.createElement('li');
+    const n = document.createElement('span');
+    n.className = 'cap-name';
+    n.textContent = name;
+    const b = document.createElement('span');
+    b.className = 'cap-blurb';
+    b.textContent = blurb;
+    li.append(n, b);
+    if (state === 'installed' || state === 'uninstalled') {
+      const btn = document.createElement('button');
+      btn.className = 'cap-toggle';
+      btn.dataset.state = state;
+      btn.textContent = state === 'installed' ? 'installed' : 'install';
+      btn.addEventListener('click', onToggle);
+      li.append(btn);
+    } else {
+      const off = document.createElement('span');
+      off.className = 'cap-blurb';
+      off.textContent = state === 'error' ? 'failed to load' : 'not in this build';
+      li.append(off);
+    }
+    return li;
+  }
+
   function renderCapsules(): void {
     const list = $('hud-capsules');
     list.innerHTML = '';
     for (const def of SECTION_CAPSULES) {
-      const state = capsuleState(def.name);
-      const li = document.createElement('li');
-      const name = document.createElement('span');
-      name.className = 'cap-name';
-      name.textContent = def.name;
-      const blurb = document.createElement('span');
-      blurb.className = 'cap-blurb';
-      blurb.textContent = def.blurb;
-      li.append(name, blurb);
-      if (state === 'installed' || state === 'uninstalled') {
-        const btn = document.createElement('button');
-        btn.className = 'cap-toggle';
-        btn.dataset.state = state;
-        btn.textContent = state === 'installed' ? 'installed' : 'install';
-        btn.addEventListener('click', () => void toggleCapsule(def.name));
-        li.append(btn);
-      } else {
-        const off = document.createElement('span');
-        off.className = 'cap-blurb';
-        off.textContent = state === 'error' ? 'failed to load' : 'not in this build';
-        li.append(off);
-      }
-      list.append(li);
+      list.append(
+        capsuleRow(def.name, def.blurb, capsuleState(def.name), () => void toggleCapsule(def.name)),
+      );
+    }
+    for (const def of FLEET) {
+      list.append(
+        capsuleRow(def.name, def.blurb, fleetState(def.name), () => toggleFleetCapsule(def.name)),
+      );
     }
   }
   onSectionCapsules(renderCapsules);
+  onFleet(renderCapsules);
 
   hud.addEventListener('click', () => {
     const open = drawer.hidden;

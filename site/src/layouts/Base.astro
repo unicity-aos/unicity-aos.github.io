@@ -49,12 +49,17 @@ const { title, description } = Astro.props;
     <script>
       import { bootKernel } from '../scripts/kernel';
       import { bootSectionCapsules } from '../scripts/section-capsules';
+      import { bootFleet } from '../scripts/fleet-host';
       import '../scripts/rail';
       // Boot the real kernel after first paint; the HUD flips when it lands.
-      // Then instantiate the section capsules that ship with this build.
+      // Then instantiate the section capsules and the agentic fleet that
+      // ship with this build.
       requestAnimationFrame(() => {
         void bootKernel().then((bridge) => {
-          if (bridge) void bootSectionCapsules(bridge);
+          if (bridge) {
+            void bootSectionCapsules(bridge);
+            void bootFleet(bridge);
+          }
         });
       });
     </script>
