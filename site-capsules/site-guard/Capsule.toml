@@ -1,0 +1,21 @@
+[package]
+name = "site-guard"
+version = "0.1.0"
+description = "Layering-demo section capsule — blocks or passes through page input by a case-insensitive blocklist"
+authors = ["Joshua J. Bouw <dev@joshuajbouw.com>", "Unicity Labs <info@unicity-labs.com>"]
+astrid-version = ">=0.1.0"
+
+[[component]]
+id = "site-guard"
+file = "site_guard.wasm"
+type = "executable"
+
+[publish]
+"site.v1.guard.blocked" = { wit = "@unicity-astrid/wit/site/guard-blocked" }
+"site.v1.guarded.text" = { wit = "@unicity-astrid/wit/site/guarded-text" }
+
+[subscribe]
+# Raw page input, handler-bound to the `handle_input` interceptor. Downstream
+# capsules (site-echo) listen on `guarded.*`; guard owning the input topic is
+# BUS TOPOLOGY, not kernel interceptor priority.
+"site.v1.input.text" = { wit = "@unicity-astrid/wit/site/input-text", handler = "handle_input" }

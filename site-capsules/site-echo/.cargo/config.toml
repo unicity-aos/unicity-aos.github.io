@@ -1,0 +1,8 @@
+[build]
+target = "wasm32-unknown-unknown"
+
+[target.wasm32-unknown-unknown]
+# Activates astrid-sys's custom getrandom backend that routes to
+# `astrid:sys.random-bytes`, matching the reference capsule. Harmless when the
+# capsule pulls no RNG; required if any dependency seeds HashMap/uuid on wasm.
+rustflags = ["--cfg=getrandom_backend=\"custom\""]

@@ -1,0 +1,21 @@
+[package]
+name = "site-echo"
+version = "0.1.0"
+edition = "2024"
+description = "Downstream echo section capsule — sits behind site-guard and replies to guarded text"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+astrid-sdk = { version = "0.7", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"

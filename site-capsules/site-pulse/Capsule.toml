@@ -1,0 +1,20 @@
+[package]
+name = "site-pulse"
+version = "0.1.0"
+description = "Homepage routing-demo section capsule — counts page clock ticks and re-publishes routing pulses"
+authors = ["Joshua J. Bouw <dev@joshuajbouw.com>", "Unicity Labs <info@unicity-labs.com>"]
+astrid-version = ">=0.1.0"
+
+[[component]]
+id = "site-pulse"
+file = "site_pulse.wasm"
+type = "executable"
+
+[publish]
+"site.v1.demo.route" = { wit = "@unicity-astrid/wit/site/demo-route" }
+
+[subscribe]
+# Page clock ticks, handler-bound so the kernel dispatches each as a pooled
+# `handle_tick` interceptor. The page is the clock — a sandboxed guest has no
+# timer authority — so it publishes the tick and this capsule reacts.
+"site.v1.clock.tick" = { wit = "@unicity-astrid/wit/site/clock-tick", handler = "handle_tick" }

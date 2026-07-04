@@ -1,0 +1,19 @@
+[package]
+name = "site-echo"
+version = "0.1.0"
+description = "Downstream echo section capsule — sits behind site-guard and replies to guarded text"
+authors = ["Joshua J. Bouw <dev@joshuajbouw.com>", "Unicity Labs <info@unicity-labs.com>"]
+astrid-version = ">=0.1.0"
+
+[[component]]
+id = "site-echo"
+file = "site_echo.wasm"
+type = "executable"
+
+[publish]
+"site.v1.echo.reply" = { wit = "@unicity-astrid/wit/site/echo-reply" }
+
+[subscribe]
+# Guarded text only, handler-bound to the `handle_guarded` interceptor. Echo
+# never sees raw input — uninstall site-guard and raw input reaches nobody.
+"site.v1.guarded.text" = { wit = "@unicity-astrid/wit/site/guarded-text", handler = "handle_guarded" }

@@ -1,0 +1,14 @@
+{
+  "name": "site-capsules",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Build + transpile pipeline for the site section capsules (site-pulse, site-guard, site-echo).",
+  "scripts": {
+    "build": "./build.sh",
+    "smoke": "node smoke.mjs"
+  },
+  "devDependencies": {
+    "@bytecodealliance/jco": "1.24.6"
+  }
+}
