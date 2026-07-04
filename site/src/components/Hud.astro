@@ -31,6 +31,9 @@
     stops. Install and uninstall mint and revoke real capability tokens on the
     audit chain. Native installs additionally verify publisher signatures.
   </p>
+  <button class="hud-model-remove mono" id="hud-model-remove" hidden>
+    remove the downloaded AI model from this browser
+  </button>
   <h3 class="mono dim">audit tail</h3>
   <ol id="hud-audit" class="hud-audit mono" reversed></ol>
   <p class="hud-note dim">
@@ -213,6 +216,27 @@
     margin-bottom: var(--s-3);
   }
 
+  .hud-model-remove {
+    background: none;
+    border: 1px solid color-mix(in srgb, var(--deny) 40%, transparent);
+    border-radius: 999px;
+    color: var(--deny);
+    font: inherit;
+    font-size: 0.72rem;
+    padding: 0.4em 1em;
+    cursor: pointer;
+    margin-bottom: var(--s-3);
+  }
+
+  .hud-model-remove:hover:not(:disabled) {
+    border-color: var(--deny);
+  }
+
+  .hud-model-remove:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
   .hud-audit {
     list-style: none;
     padding: 0;
@@ -263,6 +287,7 @@
     toggleCapsule,
   } from '../scripts/section-capsules';
   import { FLEET, fleetState, onFleet, toggleFleetCapsule } from '../scripts/fleet-host';
+  import { removeModel } from '../scripts/local-agent';
 
   const $ = (id: string) => document.getElementById(id)!;
   const hud = $('hud');
@@ -382,11 +407,36 @@
   onSectionCapsules(renderCapsules);
   onFleet(renderCapsules);
 
+  // The download is as reversible as the install: this really deletes the
+  // cached weights (Cache API + IndexedDB), leaving the machine as it was.
+  const modelBtn = $('hud-model-remove') as HTMLButtonElement;
+  modelBtn.addEventListener('click', () => {
+    const bridge = kernel();
+    if (!bridge) return;
+    modelBtn.disabled = true;
+    modelBtn.textContent = 'removing…';
+    void removeModel(bridge).then(
+      () => {
+        modelBtn.textContent = 'model removed — nothing left behind';
+        setTimeout(() => {
+          modelBtn.hidden = true;
+        }, 4000);
+      },
+      () => {
+        modelBtn.disabled = false;
+        modelBtn.textContent = 'removal failed — try again';
+      },
+    );
+  });
+
   hud.addEventListener('click', () => {
     const open = drawer.hidden;
     drawer.hidden = !open;
     hud.setAttribute('aria-expanded', String(open));
-    if (open) void refreshAudit();
+    if (open) {
+      void refreshAudit();
+      modelBtn.hidden = localStorage.getItem('astrid-agent-optin') !== '1';
+    }
   });
   $('hud-close').addEventListener('click', () => {
     drawer.hidden = true;

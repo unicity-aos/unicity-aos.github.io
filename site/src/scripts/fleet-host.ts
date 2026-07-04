@@ -29,11 +29,13 @@
  */
 
 import type { AstridBridge } from './kernel';
-import { completeOpenAi } from './local-agent';
+import { completeOpenAi, pickModel } from './local-agent';
 import { searchBook, type Chapter } from './book-lens';
 
 // Model id the seeded provider selection carries; must match local-agent's.
-const FLEET_MODEL = 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC';
+// Set from the shared platform-aware picker at boot; the default only
+// covers the window before bootFleet resolves it.
+let FLEET_MODEL = 'Qwen3.5-0.8B-q4f16_1-MLC';
 
 export interface FleetDef {
   name: string;
@@ -209,7 +211,7 @@ const pageResponders: [string, (payload: string, from: string) => void][] = [
       fleetPublish('astrid-web', 'spark.v1.response.ready', JSON.stringify({
         session_id: sessionId,
         prompt:
-          'You are the Astrid site guide, an agent running on the real Astrid kernel inside the visitor’s browser tab. Be brief, concrete, and honest. You are living proof that agents on Astrid are sandboxed WebAssembly with capability-gated powers.' +
+          'You are the Astrid site guide, an agent running on the real Astrid kernel inside the visitor’s browser tab. Astrid is NOT hypothetical, simulated, or a concept: it is a real, shipped operating system for AI agents, and a real instance of it is running in this tab right now — you are running on it. Be brief, concrete, and honest. You are living proof that agents on Astrid are sandboxed WebAssembly with capability-gated powers. /no_think' +
           (pendingGrounding.get(sessionId) ?? ''),
       }));
     },
@@ -496,6 +498,7 @@ function wasmBase(name: string): string {
 }
 
 export async function bootFleet(bridge: AstridBridge): Promise<void> {
+  FLEET_MODEL = await pickModel();
   bridgeRef = bridge;
   if (!bridge.hostKvCasSync || !bridge.hostKvListKeysSync) {
     console.warn('[fleet] bridge predates the fleet KV surface; fleet stays offline');

@@ -22,12 +22,28 @@
       right turns on a real AI that runs entirely in your tab.
     </p>
     <p class="pill-consent mono" id="pill-consent" hidden>
-      the agent runs entirely in your tab (WebGPU) and downloads roughly half
-      a gigabyte of model weights, once; your browser caches them, so it is a
-      one-time wait. nothing you type ever leaves this page.
+      the agent runs entirely in your tab (WebGPU) and downloads
+      <span id="pill-size">~450&nbsp;MB</span> of model weights, once; your
+      browser caches them, and you can remove them just as easily (under the
+      hood panel, top right). nothing you type ever leaves this page.
       <button class="pill-enable mono" id="pill-confirm" type="button">download and run</button>
+      <button class="pill-enable mono" id="pill-alt" type="button">use your own model…</button>
       <button class="pill-enable mono" id="pill-cancel" type="button">cancel</button>
     </p>
+    <div class="pill-consent mono" id="pill-endpoint" hidden>
+      <p class="pill-ep-note">
+        point the agent at any OpenAI-compatible endpoint — Ollama or LM
+        Studio on localhost, or a hosted API. The key stays in this tab's
+        memory, is sent only to the URL you give, and is never saved.
+      </p>
+      <input class="pill-ep mono" id="pill-ep-url" type="url" placeholder="http://localhost:11434/v1" autocomplete="off" spellcheck="false" />
+      <input class="pill-ep mono" id="pill-ep-key" type="password" placeholder="API key (optional)" autocomplete="off" />
+      <input class="pill-ep mono" id="pill-ep-model" type="text" placeholder="model name (optional)" autocomplete="off" spellcheck="false" />
+      <div>
+        <button class="pill-enable mono" id="pill-ep-connect" type="button">connect</button>
+        <button class="pill-enable mono" id="pill-ep-cancel" type="button">back</button>
+      </div>
+    </div>
   </div>
   <form class="pill-form" id="pill-form">
     <span class="pill-dot" id="pill-dot" data-state="lens" aria-hidden="true"></span>
@@ -252,6 +268,27 @@
     line-height: 1.6;
   }
 
+  .pill-ep-note {
+    margin-bottom: var(--s-1);
+  }
+
+  .pill-ep {
+    display: block;
+    width: 100%;
+    margin-bottom: 0.4rem;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.72rem;
+    padding: 0.5em 0.8em;
+  }
+
+  .pill-ep:focus-visible {
+    outline: none;
+    border-color: var(--bus);
+  }
+
   .pill-enable {
     background: none;
     border: 1px solid var(--line);
@@ -278,7 +315,14 @@
   import { onKernel, type AstridBridge } from '../scripts/kernel';
   import { searchBook, queryForSection, type Chapter } from '../scripts/book-lens';
   import { startNavContext, currentSection } from '../scripts/nav-context';
-  import { enableAgent, askAgent, agentState, webGpuAvailable } from '../scripts/local-agent';
+  import {
+    enableAgent,
+    askAgent,
+    agentState,
+    webGpuAvailable,
+    pickModelSize,
+    connectEndpoint,
+  } from '../scripts/local-agent';
   import { fleetReady, fleetAsk } from '../scripts/fleet-host';
 
   const $ = (id: string) => document.getElementById(id)!;
@@ -411,16 +455,23 @@
     });
   }
 
+  const epForm = $('pill-endpoint');
+
   chip.addEventListener('click', () => {
     const s = agentState();
     if (s === 'ready' || s === 'loading') return;
     showPanel();
+    mode.hidden = true;
     if (!webGpuAvailable()) {
-      mode.textContent =
-        'the local agent needs WebGPU, which this browser does not offer. the docs lens still works.';
+      // no GPU for a downloaded model, but a brought model lives elsewhere:
+      // the endpoint path stays fully available
+      epForm.hidden = false;
       return;
     }
-    mode.hidden = true;
+    void pickModelSize().then((size) => {
+      const el = document.getElementById('pill-size');
+      if (el) el.textContent = size;
+    });
     consent.hidden = false;
   });
   $('pill-cancel').addEventListener('click', () => {
@@ -428,6 +479,39 @@
     mode.hidden = false;
   });
   $('pill-confirm').addEventListener('click', () => startEngine(false));
+
+  // ---- bring-your-own-model ----
+  $('pill-alt').addEventListener('click', () => {
+    consent.hidden = true;
+    epForm.hidden = false;
+  });
+  $('pill-ep-cancel').addEventListener('click', () => {
+    epForm.hidden = true;
+    if (webGpuAvailable()) consent.hidden = false;
+    else mode.hidden = false;
+  });
+  $('pill-ep-connect').addEventListener('click', () => {
+    if (!bridge) return;
+    const base = ($('pill-ep-url') as HTMLInputElement).value.trim();
+    if (!base) return;
+    const key = ($('pill-ep-key') as HTMLInputElement).value.trim() || undefined;
+    const model = ($('pill-ep-model') as HTMLInputElement).value.trim() || undefined;
+    mode.hidden = false;
+    mode.textContent = 'checking the endpoint…';
+    connectEndpoint(bridge, { base, key, model }).then(
+      () => {
+        epForm.hidden = true;
+        chip.dataset.on = 'true';
+        chip.textContent = '✦ AI on';
+        input.placeholder = 'ask the agent…';
+        mode.textContent =
+          'your model is connected. the key (if any) lives only in this tab’s memory and is sent only to your endpoint.';
+      },
+      (err: unknown) => {
+        mode.textContent = `could not reach it: ${err instanceof Error ? err.message : err}. check the URL (https or localhost) and any CORS setting on your server.`;
+      },
+    );
+  });
 
   // The conversation is a session, not a series of one-shots: turns live in
   // module state (they survive navigation, since the pill and this module

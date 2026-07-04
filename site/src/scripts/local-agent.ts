@@ -1,7 +1,13 @@
 /**
- * Opt-in local agent: WebLLM running a small instruct model entirely in the
- * visitor's tab (WebGPU). Nothing leaves the machine; the weights download
- * once from the model host after an explicit click that states the size.
+ * Opt-in local agent. Two ways to get a brain, both private:
+ *
+ *  - DOWNLOAD: WebLLM running a small instruct model entirely in the
+ *    visitor's tab (WebGPU). Weights download once from the model host
+ *    after an explicit click that states the size, cached by the browser —
+ *    and removable: removeModel() really deletes the cached weights.
+ *  - BRING YOUR OWN: any OpenAI-compatible endpoint (Ollama or LM Studio on
+ *    localhost, or a hosted API). The key, if any, lives in this module's
+ *    memory for the life of the tab and is never persisted anywhere.
  *
  * Every state change is published on the REAL bus (site.agent.v1.status) so
  * the HUD, the rail, and any capsule can watch the agent work; token
@@ -13,7 +19,41 @@ import type { Chapter } from './book-lens';
 
 export type AgentState = 'off' | 'unsupported' | 'loading' | 'ready' | 'thinking';
 
-const MODEL = 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC';
+// Platform-aware model pick, one source of truth for the pill AND the
+// fleet. Qwen3.5-0.8B is the sweet spot as of mid-2026: two generations
+// newer than the 0.5B that confabulated "Astrid is hypothetical" (fatal on
+// a site whose pitch is that nothing is staged), at ~450 MB instead of the
+// 1 GB+ the good Gemmas cost. Phones drop to Qwen3-0.6B: iOS Safari kills
+// tabs well past ~500 MB of weights, and a smaller brain beats a crashed
+// tab. q4f16 builds need the GPU to expose shader-f16 (absent on most
+// Android/Adreno); both lines ship q4f32 fallbacks, so every WebGPU device
+// has a working variant.
+let picked = '';
+export async function pickModel(): Promise<string> {
+  if (picked) return picked;
+  let f16 = false;
+  try {
+    const adapter = await (navigator as unknown as {
+      gpu?: { requestAdapter(): Promise<{ features: Set<string> } | null> };
+    }).gpu?.requestAdapter();
+    f16 = adapter?.features.has('shader-f16') ?? false;
+  } catch {
+    /* no adapter: callers gate on webGpuAvailable() anyway */
+  }
+  const mobile =
+    /Android|iPhone|iPad|Mobi/i.test(navigator.userAgent) ||
+    ((navigator as unknown as { deviceMemory?: number }).deviceMemory ?? 8) <= 4;
+  picked = mobile
+    ? (f16 ? 'Qwen3-0.6B-q4f16_1-MLC' : 'Qwen3-0.6B-q4f32_1-MLC')
+    : (f16 ? 'Qwen3.5-0.8B-q4f16_1-MLC' : 'Qwen3.5-0.8B-q4f32_1-MLC');
+  return picked;
+}
+
+/** Human size label for the consent line, matching pickModel's choice. */
+export async function pickModelSize(): Promise<string> {
+  const m = await pickModel();
+  return m.includes('0.6B') ? '~350 MB' : '~450 MB';
+}
 
 interface Engine {
   chat: {
@@ -26,13 +66,31 @@ interface Engine {
       }): Promise<AsyncIterable<{ choices: { delta?: { content?: string } }[] }>>;
     };
   };
+  unload?(): Promise<void>;
+}
+
+export interface AgentEndpoint {
+  /** OpenAI-compatible base, e.g. http://localhost:11434/v1 */
+  base: string;
+  /** memory-only; never persisted */
+  key?: string;
+  model?: string;
 }
 
 let engine: Engine | null = null;
+let endpoint: AgentEndpoint | null = null;
 let state: AgentState = 'off';
 
 export function agentState(): AgentState {
   return state;
+}
+
+export function agentReady(): boolean {
+  return engine !== null || endpoint !== null;
+}
+
+export function endpointInfo(): AgentEndpoint | null {
+  return endpoint ? { ...endpoint, key: endpoint.key ? '(in memory)' : undefined } : null;
 }
 
 function publishStatus(bridge: AstridBridge, next: AgentState, detail: string): void {
@@ -42,6 +100,13 @@ function publishStatus(bridge: AstridBridge, next: AgentState, detail: string): 
 
 export function webGpuAvailable(): boolean {
   return 'gpu' in navigator;
+}
+
+// Qwen3-family models may think out loud in <think> blocks (the /no_think
+// switch in our prompts asks them not to, but belt and suspenders): hide
+// complete blocks and any still-open one from what visitors see.
+function stripThink(s: string): string {
+  return s.replace(/<think>[\s\S]*?<\/think>/g, '').replace(/<think>[\s\S]*$/, '').trimStart();
 }
 
 /** Download and boot the model. Progress goes to the bus and the callback. */
@@ -54,10 +119,11 @@ export async function enableAgent(
     publishStatus(bridge, 'unsupported', 'WebGPU not available in this browser');
     return false;
   }
-  publishStatus(bridge, 'loading', `downloading ${MODEL}`);
+  const model = await pickModel();
+  publishStatus(bridge, 'loading', `downloading ${model}`);
   try {
     const webllm = await import('@mlc-ai/web-llm');
-    engine = (await webllm.CreateMLCEngine(MODEL, {
+    engine = (await webllm.CreateMLCEngine(model, {
       initProgressCallback: (p: { text: string; progress: number }) => {
         onProgress(p.text, p.progress ?? 0);
         void bridge.publish(
@@ -76,20 +142,73 @@ export async function enableAgent(
 }
 
 /**
- * Raw OpenAI-shaped completion for the fleet's provider shim: the real
- * openai-compat capsule emits an OpenAI /v1/chat/completions request over
- * astrid:http, and the page answers it from this engine instead of a
- * network. Returns the full text (the capsule's SSE loop is synchronous, so
- * the completion is generated first and fed to it as buffered chunks).
+ * Really remove the downloaded model: unload the engine and delete the
+ * cached weights, config, and wasm from the browser. The visitor's machine
+ * is left as it was before they said yes.
  */
-export async function completeOpenAi(
-  bridge: AstridBridge,
+export async function removeModel(bridge: AstridBridge): Promise<void> {
+  const model = await pickModel();
+  try {
+    await engine?.unload?.();
+  } catch {
+    /* the engine may already be gone; cache deletion is the point */
+  }
+  engine = null;
+  localStorage.removeItem('astrid-agent-optin');
+  const webllm = await import('@mlc-ai/web-llm');
+  await webllm.deleteModelAllInfoInCache(model);
+  publishStatus(bridge, 'off', 'model removed from this browser — nothing left behind');
+}
+
+/**
+ * Connect an OpenAI-compatible endpoint instead of downloading anything.
+ * Verified with a real /models request before being accepted. The key is
+ * held in memory only. Works without WebGPU — the model is elsewhere.
+ */
+export async function connectEndpoint(bridge: AstridBridge, e: AgentEndpoint): Promise<void> {
+  const base = e.base.replace(/\/+$/, '');
+  const headers: Record<string, string> = {};
+  if (e.key) headers.Authorization = `Bearer ${e.key}`;
+  const res = await fetch(`${base}/models`, { headers });
+  if (!res.ok) throw new Error(`endpoint answered ${res.status} on /models`);
+  endpoint = { ...e, base };
+  const host = new URL(base).host;
+  publishStatus(bridge, 'ready', `your model · ${host}${e.model ? ` · ${e.model}` : ''}`);
+}
+
+export function disconnectEndpoint(bridge: AstridBridge): void {
+  endpoint = null;
+  publishStatus(bridge, engine ? 'ready' : 'off', engine ? 'back to the in-tab model' : 'endpoint disconnected');
+}
+
+/** One generate path for both brains; onDelta receives the running text. */
+async function generate(
   messages: { role: string; content: string }[],
   maxTokens: number,
+  onDelta: (full: string, tokens: number) => void,
 ): Promise<string> {
-  if (!engine) throw new Error('local model not enabled');
-  publishStatus(bridge, 'thinking', 'fleet turn');
-  let full = '';
+  if (endpoint) {
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (endpoint.key) headers.Authorization = `Bearer ${endpoint.key}`;
+    const res = await fetch(`${endpoint.base}/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: endpoint.model || 'default',
+        messages,
+        temperature: 0.3,
+        max_tokens: maxTokens,
+        stream: false,
+      }),
+    });
+    if (!res.ok) throw new Error(`endpoint answered ${res.status}`);
+    const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
+    const text = stripThink(json.choices?.[0]?.message?.content ?? '');
+    onDelta(text, 1);
+    return text;
+  }
+  if (!engine) throw new Error('no model: download one or connect an endpoint');
+  let raw = '';
   let n = 0;
   const stream = await engine.chat.completions.create({
     messages,
@@ -100,11 +219,34 @@ export async function completeOpenAi(
   for await (const chunk of stream) {
     const t = chunk.choices[0]?.delta?.content ?? '';
     if (!t) continue;
-    full += t;
+    raw += t;
     n += 1;
-    if (n % 8 === 0) void bridge.publish('site.agent.v1.token', JSON.stringify({ n }));
+    onDelta(stripThink(raw), n);
   }
-  publishStatus(bridge, 'ready', `generated ${n} tokens for the fleet`);
+  return stripThink(raw);
+}
+
+/**
+ * Raw OpenAI-shaped completion for the fleet's provider shim: the real
+ * openai-compat capsule emits an OpenAI /v1/chat/completions request over
+ * astrid:http, and the page answers it from whichever brain is connected.
+ * Returns the full text (the capsule's SSE loop is synchronous, so the
+ * completion is generated first and fed to it as buffered chunks).
+ */
+export async function completeOpenAi(
+  bridge: AstridBridge,
+  messages: { role: string; content: string }[],
+  maxTokens: number,
+): Promise<string> {
+  publishStatus(bridge, 'thinking', 'fleet turn');
+  let last = 0;
+  const full = await generate(messages, maxTokens, (_t, n) => {
+    if (n - last >= 8) {
+      last = n;
+      void bridge.publish('site.agent.v1.token', JSON.stringify({ n }));
+    }
+  });
+  publishStatus(bridge, 'ready', 'fleet turn finished');
   return full;
 }
 
@@ -120,7 +262,6 @@ export async function askAgent(
   history: { role: 'user' | 'assistant'; content: string }[],
   onToken: (full: string) => void,
 ): Promise<string> {
-  if (!engine) throw new Error('agent not enabled');
   publishStatus(bridge, 'thinking', question.slice(0, 80));
 
   const grounding = context
@@ -130,30 +271,18 @@ export async function askAgent(
     {
       role: 'system',
       content:
-        'You are the Astrid site guide, running locally in the visitor’s browser tab on the Astrid kernel’s own page. Answer briefly (a few sentences) and only from the provided book excerpts. If the excerpts do not cover the question, say so and name the closest chapter.',
+        'You are the Astrid site guide, running locally in the visitor’s browser tab on the Astrid kernel’s own page. Astrid is NOT hypothetical or simulated: it is a real, shipped operating system for AI agents, and a real instance is running in this tab right now. Answer briefly (a few sentences) and only from the provided book excerpts. If the excerpts do not cover the question, say so and name the closest chapter. /no_think',
     },
     ...history.slice(-6),
     { role: 'user', content: `Book excerpts:\n\n${grounding}\n\nQuestion: ${question}` },
   ];
 
-  let full = '';
-  let n = 0;
-  const stream = await engine.chat.completions.create({
-    messages,
-    stream: true,
-    temperature: 0.3,
-    max_tokens: 220,
+  let tokens = 0;
+  const full = await generate(messages, 220, (text, n) => {
+    tokens = n;
+    if (n % 8 === 0) void bridge.publish('site.agent.v1.token', JSON.stringify({ n }));
+    onToken(text);
   });
-  for await (const chunk of stream) {
-    const t = chunk.choices[0]?.delta?.content ?? '';
-    if (!t) continue;
-    full += t;
-    n += 1;
-    if (n % 8 === 0) {
-      void bridge.publish('site.agent.v1.token', JSON.stringify({ n }));
-    }
-    onToken(full);
-  }
-  publishStatus(bridge, 'ready', `answered in ${n} tokens`);
+  publishStatus(bridge, 'ready', `answered in ${tokens} tokens`);
   return full;
 }
