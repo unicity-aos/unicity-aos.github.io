@@ -1,14 +1,22 @@
 /**
  * The hero burst, live: three paper wheels of thin planks, seen at a slight
  * angle, radiating from an empty centre (the kernel). Planks are FIXED to
- * their wheel — the motion is the wheel's: it spins, stops abruptly, and
- * wiggles as the spring settles, like a hand-spun paper wheel. Each wheel
- * is a spring-damped rotation integrated on the CPU; planks lag the wheel
- * slightly by inertia, so a fast stop fans them out and they quiver back.
- * The rearmost wheel renders through a low-resolution pass, which reads as
- * gentle depth blur. Raw WebGL2 instancing, no library; monochrome in the
- * site palette. In the spirit of the rest of this site it is not a
- * pre-rendered video: it is computed in your tab, every frame.
+ * their wheel — the motion is the wheel's: it spins and slows organically
+ * into a stop, like a hand-spun paper wheel. Each wheel is a spring-damped
+ * rotation integrated on the CPU; planks lag the wheel slightly by inertia,
+ * so a spin fans them out and they slide back as it settles.
+ *
+ * Depth of field: every wheel renders into an offscreen target and gets a
+ * true two-pass Gaussian blur — slight on the front wheel, heavier toward
+ * the back — then the wheels composite back to front. Within a wheel there
+ * is no depth test at all: planks draw in a fixed painter's order with
+ * backface culling, so crossings read as clean paper layering, never as
+ * interpenetration.
+ *
+ * The burst is also an instrument: real routed kernel events nudge the
+ * wheels and light the accent planks. Raw WebGL2 instancing, no library.
+ * In the spirit of the rest of this site it is not a pre-rendered video:
+ * it is computed in your tab, every frame.
  */
 
 const VERT = `#version 300 es
@@ -21,8 +29,6 @@ in vec3 aNormal;
 in vec4 aSeed;
 // per instance: width, thickness, shade jitter, accent (0|1|2)
 in vec4 aDim;
-// per instance: z jitter, so co-planar planks layer instead of intersecting
-in float aJit;
 
 uniform mat4 uVP;
 uniform mat3 uTilt;
@@ -37,13 +43,13 @@ out float vR;
 
 void main() {
   // fixed to the path: only the wheel angle moves. The inertia lag makes
-  // planks trail a fast-moving wheel and quiver as it snaps to a stop.
+  // planks trail a fast-moving wheel and slide back as it settles.
   float ang = aSeed.x + uWheel.x - uWheel.y * aSeed.w;
 
   vec3 local = vec3(aSeed.y + aPos.x * aSeed.z, aPos.y * aDim.x, aPos.z * aDim.y);
   float c = cos(ang), s = sin(ang);
   vec3 spun = vec3(c * local.x - s * local.y, s * local.x + c * local.y, local.z);
-  spun.z += uWheel.z + aJit;
+  spun.z += uWheel.z;
   vec3 world = uTilt * spun + uCenter;
 
   vec3 n = vec3(c * aNormal.x - s * aNormal.y, s * aNormal.x + c * aNormal.y, aNormal.z);
@@ -56,6 +62,7 @@ void main() {
   gl_Position = uVP * vec4(world, 1.0);
 }`;
 
+// output is PREMULTIPLIED alpha: blur and compositing stay fringe-free
 const FRAG = `#version 300 es
 precision highp float;
 
@@ -87,8 +94,7 @@ void main() {
   outColor = vec4(col * fade, fade);
 }`;
 
-// blit a low-res layer texture to the screen (bilinear upsample = the blur)
-const BLIT_VERT = `#version 300 es
+const QUAD_VERT = `#version 300 es
 out vec2 vUv;
 void main() {
   vec2 p = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0);
@@ -96,27 +102,38 @@ void main() {
   gl_Position = vec4(p, 0.0, 1.0);
 }`;
 
+// separable Gaussian, 5 taps with linear-sampling offsets; uStep carries
+// direction, texel size, and per-wheel strength in one vec2
+const BLUR_FRAG = `#version 300 es
+precision highp float;
+in vec2 vUv;
+uniform sampler2D uTex;
+uniform vec2 uStep;
+out vec4 outColor;
+void main() {
+  vec4 c = texture(uTex, vUv) * 0.2270270270;
+  c += (texture(uTex, vUv + uStep * 1.3846153846) +
+        texture(uTex, vUv - uStep * 1.3846153846)) * 0.3162162162;
+  c += (texture(uTex, vUv + uStep * 3.2307692308) +
+        texture(uTex, vUv - uStep * 3.2307692308)) * 0.0702702703;
+  outColor = c;
+}`;
+
+// composite a wheel texture over the page (data is premultiplied)
 const BLIT_FRAG = `#version 300 es
 precision highp float;
 in vec2 vUv;
 uniform sampler2D uTex;
 out vec4 outColor;
 void main() {
-  vec4 t = texture(uTex, vUv);
-  // premultiply so composition over the page background is correct
-  outColor = vec4(t.rgb * t.a, t.a);
+  outColor = texture(uTex, vUv);
 }`;
 
 // full-frame film grain: an attributeless fullscreen triangle over the
 // whole canvas, so the void between planks has the same tooth as the planks
-const GRAIN_VERT = `#version 300 es
-void main() {
-  vec2 p = vec2(gl_VertexID == 1 ? 3.0 : -1.0, gl_VertexID == 2 ? 3.0 : -1.0);
-  gl_Position = vec4(p, 0.0, 1.0);
-}`;
-
 const GRAIN_FRAG = `#version 300 es
 precision highp float;
+in vec2 vUv;
 uniform float uTime;
 out vec4 outColor;
 
@@ -135,7 +152,8 @@ const rand = (i: number, salt: number): number => {
   return x - Math.floor(x);
 };
 
-// unit plank (radial axis x in [0,1]); six faces, 6 x 2 tris x 3 verts = 36
+// unit plank (radial axis x in [0,1]); six faces, all wound CCW-outward so
+// backface culling replaces the depth test within a wheel
 function boxGeometry(): { pos: Float32Array; nrm: Float32Array } {
   const p: number[] = [];
   const n: number[] = [];
@@ -151,26 +169,30 @@ function boxGeometry(): { pos: Float32Array; nrm: Float32Array } {
   quad([0, h, h], [1, h, h], [1, h, -h], [0, h, -h], [0, 1, 0]); // top
   quad([0, -h, -h], [1, -h, -h], [1, -h, h], [0, -h, h], [0, -1, 0]); // bottom
   quad([1, -h, h], [1, -h, -h], [1, h, -h], [1, h, h], [1, 0, 0]); // tip
-  quad([0, -h, -h], [0, h, -h], [0, h, h], [0, -h, h], [-1, 0, 0]); // inner cap
+  quad([0, -h, -h], [0, -h, h], [0, h, h], [0, h, -h], [-1, 0, 0]); // inner cap
   return { pos: new Float32Array(p), nrm: new Float32Array(n) };
 }
 
 const COUNT = 520;
 const WHEELS = 3;
 const WHEEL_Z = [-0.42, 0, 0.42];
+// Gaussian strength per wheel, in source texels (0 = back wheel, heaviest)
+const BLUR_STRENGTH = [2.6, 1.2, 0.4];
+// offscreen scale: high enough that sharpness comes from the blur radius,
+// not from resolution crunch
+const TARGET_SCALE = 0.75;
 
 interface WheelData {
   seed: Float32Array;
   dim: Float32Array;
-  jit: Float32Array;
   count: number;
 }
 
 function wheelData(): WheelData[] {
-  const per: { seed: number[]; dim: number[]; jit: number[] }[] = [
-    { seed: [], dim: [], jit: [] },
-    { seed: [], dim: [], jit: [] },
-    { seed: [], dim: [], jit: [] },
+  const per: { seed: number[]; dim: number[] }[] = [
+    { seed: [], dim: [] },
+    { seed: [], dim: [] },
+    { seed: [], dim: [] },
   ];
   for (let i = 0; i < COUNT; i++) {
     const w = per[Math.floor(rand(i, 9) * WHEELS)];
@@ -191,15 +213,11 @@ function wheelData(): WheelData[] {
       rand(i, 7), // shade jitter
       a > 0.955 ? 2 : a > 0.87 ? 1 : 0, // sparse accents
     );
-    // co-planar planks would intersect mid-face; a per-plank depth nudge
-    // turns every crossing into clean layering
-    w.jit.push((rand(i, 13) - 0.5) * 0.14);
   }
   return per.map((w) => ({
     seed: new Float32Array(w.seed),
     dim: new Float32Array(w.dim),
-    jit: new Float32Array(w.jit),
-    count: w.jit.length,
+    count: w.dim.length / 4,
   }));
 }
 
@@ -270,11 +288,6 @@ function link(gl: WebGL2RenderingContext, vs: string, fs: string): WebGLProgram 
   return prog;
 }
 
-// cinematic depth of field on the cheap: every wheel renders at reduced
-// resolution and the bilinear upsample is the blur — slight on the front
-// wheel, heavier toward the back (index 0 = back)
-const BLUR_SCALES = [0.34, 0.55, 0.8];
-
 export interface BurstHandle {
   /** stop the loop and release the GL context */
   stop(): void;
@@ -299,28 +312,29 @@ export function startBurst(
 
   const prog = link(gl, VERT, FRAG);
   if (!prog) return null;
-  const blitProg = link(gl, BLIT_VERT, BLIT_FRAG);
-  const grainProg = link(gl, GRAIN_VERT, GRAIN_FRAG);
+  const blurProg = link(gl, QUAD_VERT, BLUR_FRAG);
+  const blitProg = link(gl, QUAD_VERT, BLIT_FRAG);
+  const grainProg = link(gl, QUAD_VERT, GRAIN_FRAG);
+  if (!blurProg || !blitProg) return null;
 
   gl.useProgram(prog);
   const geo = boxGeometry();
   const wheels = wheelData();
 
-  const geoBuf = (data: Float32Array) => {
+  const makeBuf = (data: Float32Array) => {
     const buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
     gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
     return buf;
   };
-  const posBuf = geoBuf(geo.pos);
-  const nrmBuf = geoBuf(geo.nrm);
+  const posBuf = makeBuf(geo.pos);
+  const nrmBuf = makeBuf(geo.nrm);
 
   const loc = {
     pos: gl.getAttribLocation(prog, 'aPos'),
     nrm: gl.getAttribLocation(prog, 'aNormal'),
     seed: gl.getAttribLocation(prog, 'aSeed'),
     dim: gl.getAttribLocation(prog, 'aDim'),
-    jit: gl.getAttribLocation(prog, 'aJit'),
   };
 
   // one VAO per wheel so each renders as its own pass
@@ -335,9 +349,8 @@ export function startBurst(
     };
     wire(posBuf!, loc.pos, 3, 0);
     wire(nrmBuf!, loc.nrm, 3, 0);
-    wire(geoBuf(w.seed)!, loc.seed, 4, 1);
-    wire(geoBuf(w.dim)!, loc.dim, 4, 1);
-    wire(geoBuf(w.jit)!, loc.jit, 1, 1);
+    wire(makeBuf(w.seed)!, loc.seed, 4, 1);
+    wire(makeBuf(w.dim)!, loc.dim, 4, 1);
     return vao;
   });
 
@@ -347,7 +360,9 @@ export function startBurst(
   const uTime = gl.getUniformLocation(prog, 'uTime');
   const uWheel = gl.getUniformLocation(prog, 'uWheel');
   const uEnergy = gl.getUniformLocation(prog, 'uEnergy');
-  const uBlitTex = blitProg ? gl.getUniformLocation(blitProg, 'uTex') : null;
+  const uBlurTex = gl.getUniformLocation(blurProg, 'uTex');
+  const uBlurStep = gl.getUniformLocation(blurProg, 'uStep');
+  const uBlitTex = gl.getUniformLocation(blitProg, 'uTex');
   const uGrainTime = grainProg ? gl.getUniformLocation(grainProg, 'uTime') : null;
   const emptyVao = gl.createVertexArray(); // for attributeless fullscreen tris
 
@@ -356,20 +371,39 @@ export function startBurst(
   const cx = Math.cos(tx), sx = Math.sin(tx);
   gl.uniformMatrix3fv(uTilt, false, [1, 0, 0, 0, cx, sx, 0, -sx, cx]);
 
-  gl.enable(gl.DEPTH_TEST);
+  // paper rules: no depth test anywhere. Within a wheel, fixed painter's
+  // order + backface culling; between wheels, back-to-front compositing.
+  gl.disable(gl.DEPTH_TEST);
+  gl.enable(gl.CULL_FACE);
+  gl.cullFace(gl.BACK);
+  gl.frontFace(gl.CCW);
   gl.enable(gl.BLEND);
-  gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
   gl.clearColor(0, 0, 0, 0);
 
-  // one reduced-resolution target per wheel; the scale sets its blur
-  const targets = BLUR_SCALES.map((scale) => ({
-    scale,
-    fbo: gl.createFramebuffer(),
-    tex: gl.createTexture(),
-    depth: gl.createRenderbuffer(),
-    w: 0,
-    h: 0,
-  }));
+  // per wheel: a render texture; plus one shared scratch for blur ping-pong
+  const mkTex = () => {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return tex;
+  };
+  const wheelTex = [mkTex(), mkTex(), mkTex()];
+  const scratchTex = mkTex();
+  const wheelFbo = wheelTex.map((tex) => {
+    const fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    return fbo;
+  });
+  const scratchFbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, scratchFbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, scratchTex, 0);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  let tgtW = 0;
+  let tgtH = 0;
 
   const DIST = 10;
   const FOVY = (35 * Math.PI) / 180;
@@ -391,21 +425,11 @@ export function startBurst(
     const ndcY = 1 - centerFrac.y * 2;
     gl!.uniform3f(uCenter, (ndcX * aspect * DIST) / f, (ndcY * DIST) / f, -DIST);
 
-    for (const t of targets) {
-      t.w = Math.max(1, Math.round(w * t.scale));
-      t.h = Math.max(1, Math.round(h * t.scale));
-      gl!.bindTexture(gl!.TEXTURE_2D, t.tex);
-      gl!.texImage2D(gl!.TEXTURE_2D, 0, gl!.RGBA, t.w, t.h, 0, gl!.RGBA, gl!.UNSIGNED_BYTE, null);
-      gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_MIN_FILTER, gl!.LINEAR);
-      gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_MAG_FILTER, gl!.LINEAR);
-      gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_WRAP_S, gl!.CLAMP_TO_EDGE);
-      gl!.texParameteri(gl!.TEXTURE_2D, gl!.TEXTURE_WRAP_T, gl!.CLAMP_TO_EDGE);
-      gl!.bindRenderbuffer(gl!.RENDERBUFFER, t.depth);
-      gl!.renderbufferStorage(gl!.RENDERBUFFER, gl!.DEPTH_COMPONENT16, t.w, t.h);
-      gl!.bindFramebuffer(gl!.FRAMEBUFFER, t.fbo);
-      gl!.framebufferTexture2D(gl!.FRAMEBUFFER, gl!.COLOR_ATTACHMENT0, gl!.TEXTURE_2D, t.tex, 0);
-      gl!.framebufferRenderbuffer(gl!.FRAMEBUFFER, gl!.DEPTH_ATTACHMENT, gl!.RENDERBUFFER, t.depth);
-      gl!.bindFramebuffer(gl!.FRAMEBUFFER, null);
+    tgtW = Math.max(1, Math.round(w * TARGET_SCALE));
+    tgtH = Math.max(1, Math.round(h * TARGET_SCALE));
+    for (const tex of [...wheelTex, scratchTex]) {
+      gl!.bindTexture(gl!.TEXTURE_2D, tex);
+      gl!.texImage2D(gl!.TEXTURE_2D, 0, gl!.RGBA, tgtW, tgtH, 0, gl!.RGBA, gl!.UNSIGNED_BYTE, null);
     }
   }
   resize();
@@ -425,12 +449,6 @@ export function startBurst(
   let raf = 0;
   let stopped = false;
 
-  const drawWheel = (i: number) => {
-    gl.uniform3f(uWheel, springs[i].theta, springs[i].vel, WHEEL_Z[i]);
-    gl.bindVertexArray(vaos[i]);
-    gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, wheels[i].count);
-  };
-
   const frame = (ms: number) => {
     if (stopped) return;
     if (visible) {
@@ -440,42 +458,52 @@ export function startBurst(
       if (!still) for (const s of springs) s.step(t, dt);
       energy *= Math.exp(-Math.min(dt, 0.1) * 1.6);
 
-      // pass 1: each wheel into its own reduced target (upsample = blur,
-      // slight up front, heavier toward the back)
-      gl.useProgram(prog);
-      gl.uniform1f(uTime, t);
-      gl.uniform1f(uEnergy, energy);
-      gl.enable(gl.DEPTH_TEST);
+      gl.viewport(0, 0, tgtW, tgtH);
       for (let i = 0; i < WHEELS; i++) {
-        const tg = targets[i];
-        gl.bindFramebuffer(gl.FRAMEBUFFER, tg.fbo);
-        gl.viewport(0, 0, tg.w, tg.h);
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-        drawWheel(i);
+        // pass 1: the wheel into its texture (premultiplied)
+        gl.useProgram(prog);
+        gl.uniform1f(uTime, t);
+        gl.uniform1f(uEnergy, energy);
+        gl.uniform3f(uWheel, springs[i].theta, springs[i].vel, WHEEL_Z[i]);
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, wheelFbo[i]);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.bindVertexArray(vaos[i]);
+        gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, wheels[i].count);
+
+        // pass 2: true Gaussian, horizontal then vertical, per-wheel radius
+        const s = BLUR_STRENGTH[i];
+        gl.useProgram(blurProg);
+        gl.bindVertexArray(emptyVao);
+        gl.disable(gl.BLEND);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.uniform1i(uBlurTex, 0);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, scratchFbo);
+        gl.bindTexture(gl.TEXTURE_2D, wheelTex[i]);
+        gl.uniform2f(uBlurStep, s / tgtW, 0);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, wheelFbo[i]);
+        gl.bindTexture(gl.TEXTURE_2D, scratchTex);
+        gl.uniform2f(uBlurStep, 0, s / tgtH);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.enable(gl.BLEND);
       }
 
-      // pass 2: composite back to front
+      // pass 3: composite back to front, then the film grain
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       gl.viewport(0, 0, canvas.width, canvas.height);
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-      if (blitProg) {
-        gl.useProgram(blitProg);
-        gl.disable(gl.DEPTH_TEST);
-        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
-        gl.bindVertexArray(emptyVao);
-        gl.activeTexture(gl.TEXTURE0);
-        gl.uniform1i(uBlitTex, 0);
-        for (let i = 0; i < WHEELS; i++) {
-          gl.bindTexture(gl.TEXTURE_2D, targets[i].tex);
-          gl.drawArrays(gl.TRIANGLES, 0, 3);
-        }
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(blitProg);
+      gl.bindVertexArray(emptyVao);
+      gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      gl.uniform1i(uBlitTex, 0);
+      for (let i = 0; i < WHEELS; i++) {
+        gl.bindTexture(gl.TEXTURE_2D, wheelTex[i]);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
-
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
       if (grainProg) {
         gl.useProgram(grainProg);
-        gl.bindVertexArray(emptyVao);
-        gl.disable(gl.DEPTH_TEST);
         gl.uniform1f(uGrainTime, t);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
