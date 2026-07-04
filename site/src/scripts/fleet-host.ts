@@ -30,6 +30,7 @@
 
 import type { AstridBridge } from './kernel';
 import { completeOpenAi } from './local-agent';
+import { searchBook, type Chapter } from './book-lens';
 
 // Model id the seeded provider selection carries; must match local-agent's.
 const FLEET_MODEL = 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC';
@@ -185,6 +186,13 @@ function dispatch(target: Runtime, handler: string, payload: string): void {
   }
 }
 
+/**
+ * Book grounding staged per session by fleetAsk BEFORE the turn's
+ * user.v1.prompt goes out, so the spark responder (which supplies the
+ * system prompt) can fold the retrieved excerpts in synchronously.
+ */
+const pendingGrounding = new Map<string, string>();
+
 /** Page-side responders for fleet requests no in-tab capsule serves. */
 const pageResponders: [string, (payload: string, from: string) => void][] = [
   [
@@ -201,7 +209,8 @@ const pageResponders: [string, (payload: string, from: string) => void][] = [
       fleetPublish('astrid-web', 'spark.v1.response.ready', JSON.stringify({
         session_id: sessionId,
         prompt:
-          'You are the Astrid site guide, an agent running on the real Astrid kernel inside the visitor’s browser tab. Be brief, concrete, and honest. You are living proof that agents on Astrid are sandboxed WebAssembly with capability-gated powers.',
+          'You are the Astrid site guide, an agent running on the real Astrid kernel inside the visitor’s browser tab. Be brief, concrete, and honest. You are living proof that agents on Astrid are sandboxed WebAssembly with capability-gated powers.' +
+          (pendingGrounding.get(sessionId) ?? ''),
       }));
     },
   ],
@@ -542,12 +551,31 @@ export function toggleFleetCapsule(name: string): void {
   notify();
 }
 
-/** Page-side entry: publish a real user prompt into the fleet. */
-export function fleetAsk(sessionId: string, text: string): void {
+/**
+ * Page-side entry: retrieve book grounding for the question, stage it for
+ * the spark responder, then publish the real user prompt into the fleet.
+ * Returns the chapters used so the caller can show what grounded the turn.
+ */
+export async function fleetAsk(sessionId: string, text: string): Promise<Chapter[]> {
+  let chapters: Chapter[] = [];
+  try {
+    chapters = await searchBook(text, 2);
+  } catch {
+    /* index unavailable; the turn runs on the base prompt alone */
+  }
+  pendingGrounding.set(
+    sessionId,
+    chapters.length
+      ? '\n\nBook excerpts relevant to the visitor’s question:\n\n' +
+        chapters.map((c) => `## ${c.title}\n${c.text.slice(0, 1400)}`).join('\n\n') +
+        '\n\nAnswer only from these excerpts. If they do not cover the question, say so and name the closest chapter.'
+      : '',
+  );
   fleetPublish('astrid-web', 'user.v1.prompt', JSON.stringify({
     type: 'user_input',
     text,
     session_id: sessionId,
     context: null,
   }));
+  return chapters;
 }

@@ -479,7 +479,16 @@
         fleetTurn = { role: 'assistant', text: '…' };
         transcript.push(fleetTurn);
         renderTranscript();
-        fleetAsk(FLEET_SESSION, q);
+        // fleetAsk retrieves book grounding first (it rides in the system
+        // prompt), then publishes the turn; the refs it returns are the
+        // chapters the answer is grounded in. Capture the turn locally:
+        // fleetTurn is nulled once the final response lands.
+        const turn = fleetTurn;
+        const chapters = await fleetAsk(FLEET_SESSION, q);
+        if (chapters.length) {
+          turn.refs = chapters.map((c) => ({ slug: c.slug, title: c.title }));
+          renderTranscript();
+        }
         return;
       }
       const chapters = await searchBook(q, 3);
