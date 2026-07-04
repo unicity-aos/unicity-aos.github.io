@@ -211,6 +211,18 @@
     line-height: 1.6;
   }
 
+  .pill-results :global(.turn-you) {
+    color: var(--text-dim);
+    font-size: 0.78rem;
+    border-top: 1px solid var(--line);
+    padding-top: 0.5em;
+  }
+
+  .pill-results :global(.turn-you:first-child) {
+    border-top: none;
+    padding-top: 0;
+  }
+
   .pill-results :global(.ctx) {
     color: var(--text-faint);
     font-size: 0.8em;
@@ -386,47 +398,68 @@
   });
   $('pill-confirm').addEventListener('click', () => startEngine(false));
 
+  // The conversation is a session, not a series of one-shots: turns live in
+  // module state (they survive navigation, since the pill and this module
+  // persist) and prior turns feed the model as context.
+  interface Turn {
+    role: 'user' | 'assistant';
+    text: string;
+    refs?: { slug: string; title: string }[];
+  }
+  const transcript: Turn[] = [];
+
+  function renderTranscript(): void {
+    results.innerHTML = '';
+    for (const t of transcript) {
+      const p = document.createElement('p');
+      p.className = t.role === 'user' ? 'turn-you mono' : 'answer';
+      p.textContent = t.role === 'user' ? `you · ${t.text}` : t.text;
+      results.append(p);
+      if (t.refs?.length) {
+        const ctx = document.createElement('p');
+        ctx.className = 'ctx mono';
+        ctx.textContent = `grounded in: ${t.refs.map((r) => r.title).join(' · ')}`;
+        results.append(ctx);
+      }
+    }
+    panel.scrollTop = panel.scrollHeight;
+  }
+
   $('pill-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const q = input.value.trim();
     if (!q) return;
+    input.value = '';
     showPanel();
     void (async () => {
       const chapters = await searchBook(q, 3);
       if (agentState() === 'ready' && bridge) {
-        results.innerHTML = '';
-        const ans = document.createElement('p');
-        ans.className = 'answer';
-        ans.textContent = '…';
-        const ctx = document.createElement('p');
-        ctx.className = 'ctx mono';
-        ctx.textContent = `grounded in: ${chapters.map((c) => c.title).join(' · ') || 'nothing matched'}`;
-        results.append(ans, ctx);
+        const history = transcript.map((t) => ({
+          role: t.role,
+          content: t.text,
+        }));
+        transcript.push({ role: 'user', text: q });
+        const reply: Turn = {
+          role: 'assistant',
+          text: '…',
+          refs: chapters.map((c) => ({ slug: c.slug, title: c.title })),
+        };
+        transcript.push(reply);
+        renderTranscript();
         try {
-          await askAgent(bridge, q, chapters, (full) => {
-            ans.textContent = full;
+          await askAgent(bridge, q, chapters, history, (full) => {
+            reply.text = full;
+            renderTranscript();
           });
         } catch (err) {
-          ans.textContent = `agent failed: ${err instanceof Error ? err.message : err}`;
+          reply.text = `agent failed: ${err instanceof Error ? err.message : err}`;
+          renderTranscript();
         }
-        renderAppendLinks(chapters);
       } else {
         renderChapters(chapters, `chapters matching "${q}":`);
       }
     })();
   });
-
-  function renderAppendLinks(chapters: Chapter[]): void {
-    for (const c of chapters) {
-      const a = document.createElement('a');
-      a.href = `/book/${c.slug}/`;
-      const t = document.createElement('span');
-      t.className = 't';
-      t.textContent = c.title;
-      a.append(t);
-      results.append(a);
-    }
-  }
 
   // Click-away closes the panel.
   document.addEventListener('click', (e) => {

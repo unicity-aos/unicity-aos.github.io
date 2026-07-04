@@ -75,11 +75,16 @@ export async function enableAgent(
   }
 }
 
-/** Answer a question grounded in retrieved book chapters, streaming tokens. */
+/**
+ * Answer a question grounded in retrieved book chapters, streaming tokens.
+ * `history` carries prior turns so the conversation is genuinely a session,
+ * not a series of one-shots (most recent turns only; the model is small).
+ */
 export async function askAgent(
   bridge: AstridBridge,
   question: string,
   context: Chapter[],
+  history: { role: 'user' | 'assistant'; content: string }[],
   onToken: (full: string) => void,
 ): Promise<string> {
   if (!engine) throw new Error('agent not enabled');
@@ -94,6 +99,7 @@ export async function askAgent(
       content:
         'You are the Astrid site guide, running locally in the visitor’s browser tab on the Astrid kernel’s own page. Answer briefly (a few sentences) and only from the provided book excerpts. If the excerpts do not cover the question, say so and name the closest chapter.',
     },
+    ...history.slice(-6),
     { role: 'user', content: `Book excerpts:\n\n${grounding}\n\nQuestion: ${question}` },
   ];
 
