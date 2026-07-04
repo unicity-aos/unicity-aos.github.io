@@ -177,8 +177,8 @@ const front = burst(170, 23, 130, 255);
   function wire(): void {
     const canvas = document.getElementById('burst-gl') as HTMLCanvasElement | null;
     if (!canvas || stop) return;
-    // burst centre matches the SVG's old anchor: 72% across, vertically centred
-    stop = startBurst(canvas, { x: 0.72, y: 0.5 });
+    // burst centre well right of the headline so the crescent stays clear
+    stop = startBurst(canvas, { x: 0.78, y: 0.5 });
     if (stop) canvas.parentElement?.setAttribute('data-gl', 'true');
   }
   wire();

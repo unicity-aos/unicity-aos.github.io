@@ -43,12 +43,12 @@ void main() {
   w = sign(w) * pow(abs(w), 0.72);
   float len = aSeed.z * (0.78 + 0.25 * w);
   // the whole slat also shifts bodily outward a touch, like it was shoved
-  float r0 = aSeed.y + 0.09 * w;
+  float r0 = aSeed.y + 0.07 * w;
 
   vec3 local = vec3(r0 + aPos.x * len, aPos.y * aDim.x, aPos.z * aDim.y);
   float c = cos(ang), s = sin(ang);
   vec3 spun = vec3(c * local.x - s * local.y, s * local.x + c * local.y, local.z);
-  spun.z += (aLayer - 1.0) * 0.55; // separate the discs in depth
+  spun.z += (aLayer - 1.0) * 0.42; // separate the discs in depth
   vec3 world = uTilt * spun + uCenter;
 
   vec3 n = vec3(c * aNormal.x - s * aNormal.y, s * aNormal.x + c * aNormal.y, aNormal.z);
@@ -78,14 +78,15 @@ float hash(vec2 p) {
 void main() {
   // monochrome violet-greys; definition comes from the lighting, like the
   // reference. A sparse few slats carry the bus/audit accents.
-  vec3 base = mix(vec3(0.078, 0.086, 0.133), vec3(0.196, 0.203, 0.322), vShade);
-  if (vAccent > 1.5) base = vec3(0.22, 0.42, 0.40);        // bus teal, dimmed
-  else if (vAccent > 0.5) base = vec3(0.42, 0.32, 0.62);   // capsule purple, dimmed
-  vec3 col = base * (0.38 + 0.85 * vLight);
+  vec3 base = mix(vec3(0.10, 0.11, 0.17), vec3(0.30, 0.31, 0.47), vShade);
+  if (vAccent > 1.5) base = vec3(0.30, 0.55, 0.52);        // bus teal
+  else if (vAccent > 0.5) base = vec3(0.55, 0.44, 0.82);   // capsule purple
+  // wide dynamic range: shadowed faces sink toward the bg, lit faces glow
+  vec3 col = base * (0.26 + 1.15 * vLight);
   // surface tooth; the full-frame film grain is a separate pass
   col += (hash(gl_FragCoord.xy + fract(uTime) * 61.7) - 0.5) * 0.03;
   // fade the far rim out so the burst dissolves instead of hard-stopping
-  float fade = 1.0 - smoothstep(0.72, 1.05, vR);
+  float fade = 1.0 - smoothstep(0.78, 1.02, vR);
   outColor = vec4(col * fade, fade);
 }`;
 
@@ -118,7 +119,7 @@ const rand = (i: number, salt: number): number => {
 };
 
 // unit slat (radial axis x in [0,1]); the inner face is never visible from
-// outside the ring, so five faces suffice: 5 x 2 tris x 3 verts = 30.
+// outside the ring; six faces, 6 x 2 tris x 3 verts = 36.
 function boxGeometry(): { pos: Float32Array; nrm: Float32Array } {
   const p: number[] = [];
   const n: number[] = [];
@@ -134,20 +135,24 @@ function boxGeometry(): { pos: Float32Array; nrm: Float32Array } {
   quad([0, h, h], [1, h, h], [1, h, -h], [0, h, -h], [0, 1, 0]); // top
   quad([0, -h, -h], [1, -h, -h], [1, -h, h], [0, -h, h], [0, -1, 0]); // bottom
   quad([1, -h, h], [1, -h, -h], [1, h, -h], [1, h, h], [1, 0, 0]); // tip
+  // inner cap: with a crisp start rim the inner ends face the camera
+  quad([0, -h, -h], [0, h, -h], [0, h, h], [0, -h, h], [-1, 0, 0]);
   return { pos: new Float32Array(p), nrm: new Float32Array(n) };
 }
 
-const COUNT = 380;
+const COUNT = 520;
 
 function instanceData(): { seed: Float32Array; dim: Float32Array; layer: Float32Array } {
   const seed = new Float32Array(COUNT * 4);
   const dim = new Float32Array(COUNT * 4);
   const layer = new Float32Array(COUNT);
   for (let i = 0; i < COUNT; i++) {
-    const band = rand(i, 11);
     seed[i * 4] = rand(i, 1) * Math.PI * 2;
-    seed[i * 4 + 1] = 1.05 + band * 1.35; // start radius
-    seed[i * 4 + 2] = 0.6 + rand(i, 3) * 1.8 * (0.45 + band * 0.55); // length
+    // a crisp inner rim: every plank starts near the same circle, so the
+    // iris edge reads clean while the outer tips stay ragged
+    seed[i * 4 + 1] = 1.32 + rand(i, 11) * 0.45; // start radius
+    // many short planks, a few long rays
+    seed[i * 4 + 2] = 0.4 + Math.pow(rand(i, 3), 1.6) * 1.9; // length
     seed[i * 4 + 3] = rand(i, 4) * Math.PI * 2; // phase
     // planks, not sticks: wide in the disc plane, thin through it
     dim[i * 4] = 0.06 + rand(i, 5) * 0.09; // width
@@ -292,7 +297,7 @@ export function startBurst(
       gl.bindVertexArray(vao);
       gl.enable(gl.DEPTH_TEST);
       gl.uniform1f(uTime, t);
-      gl.drawArraysInstanced(gl.TRIANGLES, 0, 30, COUNT);
+      gl.drawArraysInstanced(gl.TRIANGLES, 0, 36, COUNT);
       if (grainOk) {
         gl.useProgram(grainProg);
         gl.bindVertexArray(grainVao);
