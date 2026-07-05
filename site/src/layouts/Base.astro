@@ -4,6 +4,7 @@ import '@fontsource-variable/inter';
 import '@fontsource/ibm-plex-mono/400.css';
 import '@fontsource/ibm-plex-mono/500.css';
 import '../styles/tokens.css';
+import '../styles/brand-unicity.css';
 import '../styles/base.css';
 import { ClientRouter } from 'astro:transitions';
 import Hud from '../components/Hud.astro';
@@ -30,6 +31,13 @@ const { title, description } = Astro.props;
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
     <meta name="theme-color" content="#07080D" />
+    <script is:inline>
+      // Apply a persisted brand before first paint — no wrong-colour flash.
+      try {
+        if (localStorage.getItem('site-brand') === 'unicity')
+          document.documentElement.dataset.brand = 'unicity';
+      } catch {}
+    </script>
     <ClientRouter />
   </head>
   <body>
@@ -43,6 +51,9 @@ const { title, description } = Astro.props;
       <a href="/playground/">playground</a>
       <a href="/registry/">registry</a>
       <a href="/start/">start building</a>
+      <button class="site-skin" id="site-skin" type="button" title="Swap the site's colours">
+        ⇄ unicity
+      </button>
     </nav>
     <div transition:persist="hud"><Hud /></div>
     <div transition:persist="agent-pill"><AgentPill /></div>
@@ -51,7 +62,9 @@ const { title, description } = Astro.props;
       import { bootKernel } from '../scripts/kernel';
       import { bootSectionCapsules } from '../scripts/section-capsules';
       import { bootFleet } from '../scripts/fleet-host';
+      import { initBrandToggle } from '../scripts/brand';
       import '../scripts/rail';
+      initBrandToggle(document.getElementById('site-skin') as HTMLButtonElement);
       // Boot the real kernel after first paint; the HUD flips when it lands.
       // Then instantiate the section capsules and the agentic fleet that
       // ship with this build.
@@ -94,6 +107,21 @@ const { title, description } = Astro.props;
       .site-soon {
         color: var(--text-faint);
         cursor: default;
+      }
+
+      /* the costume switch: quiet, at the end of the row */
+      .site-skin {
+        border: 0;
+        background: none;
+        padding: 0;
+        font: inherit;
+        color: var(--text-faint);
+        cursor: pointer;
+        transition: color var(--t-fast) var(--ease-out);
+      }
+
+      .site-skin:hover {
+        color: var(--text);
       }
 
       /* Phones: the floating links become a real bar — full width, blurred

@@ -1,0 +1,60 @@
+/*
+ * The Unicity skin. Same site, same machine — wearing the parent brand:
+ * unicity.ai's electric blue on near-black, Anton display, Geist body,
+ * Geist Mono details. Everything routes through the design tokens, so this
+ * file is a costume change, not a redesign. The WebGL eye keeps its own
+ * plumage on purpose: it is the machine, not the brand.
+ *
+ * Palette lifted from unicity.ai's published stylesheet:
+ * blue #2453ff / #003cff, orange #ff6f00, greys #0a0a0a→#ddd.
+ */
+:root[data-brand='unicity'] {
+  /* surfaces */
+  --bg: #0a0a0a;
+  --bg-raised: #0f0f0f;
+  --surface: #171717;
+  --line: #292929;
+  --line-bright: #3a3a3a;
+
+  /* ink */
+  --text: #ffffff;
+  --text-dim: #b6b6b6;
+  --text-faint: #7c7c7c;
+
+  /* the machine, in house colours: blue is the star, orange is the warning */
+  --kernel: #c9c9c9;
+  --bus: #5e8bff;
+  --bus-dim: #2453ff33;
+  --capsule: #2453ff;
+  --capsule-dim: #2453ff2e;
+  --grant: #4ade80;
+  --deny: #ff6f00;
+  --audit: #ffb380;
+
+  --aurora: linear-gradient(135deg, #bcd0ff 0%, #5e8bff 45%, #2453ff 100%);
+
+  /* type */
+  --font-display: 'Anton', 'Geist Sans', system-ui, sans-serif;
+  --font-body: 'Geist Sans', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', monospace;
+
+  /* Unicity's edges are sharper than ours */
+  --radius: 4px;
+  --radius-lg: 8px;
+}
+
+/* Anton ships one weight; faux-bolding it smears. Let it be itself. */
+:root[data-brand='unicity'] h1,
+:root[data-brand='unicity'] h2,
+:root[data-brand='unicity'] h3 {
+  font-weight: 400;
+  letter-spacing: 0.015em;
+}
+
+/* Their buttons are mono, tracked wide, quietly uppercase. */
+:root[data-brand='unicity'] .btn {
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.82em;
+}
