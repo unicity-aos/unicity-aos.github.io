@@ -44,7 +44,9 @@ const kernelEntry = existsSync(kernelPkg)
   : fileURLToPath(new URL('./src/scripts/kernel-stub.ts', import.meta.url));
 
 export default defineConfig({
-  site: 'https://astrid.dev',
+  // The live host — llms.txt and canonical URLs are built from this, so it
+  // must be where the site actually serves. Update on custom-domain day.
+  site: 'https://unicity-astrid.github.io',
   output: 'static',
   markdown: {
     shikiConfig: { theme: 'github-dark-default' },
