@@ -51,7 +51,7 @@ void main() {
   // own angle, so the flex is a true arc that straightens as the wheel
   // settles.
   float lag = clamp(uWheel.y * aSeed.w, -0.8, 0.8);
-  float ang = aSeed.x + uWheel.x - lag * (0.15 + 0.85 * aPos.x * aPos.x);
+  float ang = aSeed.x + uWheel.x - lag * (0.575 + 0.425 * aPos.x * aPos.x);
 
   vec3 local = vec3(aSeed.y + aPos.x * aSeed.z, aPos.y * aDim.x, aPos.z * aDim.y);
   float c = cos(ang), s = sin(ang);
