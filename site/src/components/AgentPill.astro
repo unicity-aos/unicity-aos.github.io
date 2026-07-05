@@ -26,7 +26,6 @@
       <span id="pill-size">~450&nbsp;MB</span> of model weights, once. Your
       browser caches them, and you can remove them just as easily (Under the
       hood panel, top right). Nothing you type ever leaves this page.
-      <span id="pill-wifi" hidden>On mobile data that's a real download — Wi-Fi is kinder.</span>
       <button class="pill-enable mono" id="pill-confirm" type="button">Download and run</button>
       <button class="pill-enable mono" id="pill-alt" type="button">Use your own model…</button>
       <button class="pill-enable mono" id="pill-cancel" type="button">Cancel</button>
@@ -655,13 +654,21 @@
       openEndpointForm();
       return;
     }
+    // Phones don't get the download at all: a 1B model's working set sits
+    // above iOS Safari's per-tab memory ceiling (field-tested: the tab
+    // dies mid-load), and a model small enough to survive isn't worth the
+    // download. A brought key runs on the provider, so that path stays.
+    if (/Android|iPhone|iPad|Mobi/i.test(navigator.userAgent)) {
+      mode.hidden = false;
+      mode.textContent =
+        'On-device AI needs desktop-class memory, and phone browsers kill the tab mid-load. Bring your own key below — that runs on the provider, not the phone — or open this page on a computer.';
+      openEndpointForm();
+      return;
+    }
     void pickModelSize().then((size) => {
       const el = document.getElementById('pill-size');
       if (el) el.textContent = size;
     });
-    // Phones confirm with eyes open: surface the data-plan reality.
-    const wifi = document.getElementById('pill-wifi');
-    if (wifi) wifi.hidden = !/Android|iPhone|iPad|Mobi/i.test(navigator.userAgent);
     consent.hidden = false;
   });
   $('pill-cancel').addEventListener('click', () => {
