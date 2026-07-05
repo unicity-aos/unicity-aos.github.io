@@ -109,6 +109,23 @@
         white-space: pre-wrap;
       }
 
+      /* streamed characters fade in rather than snap-appearing */
+      .lk-agent .roll {
+        animation: roll-in 0.3s ease-out both;
+      }
+
+      @keyframes roll-in {
+        from {
+          opacity: 0;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .lk-agent .roll {
+          animation: none;
+        }
+      }
+
       .link-form {
         display: flex;
         gap: 0.5rem;
@@ -169,6 +186,7 @@
 
       let send: ((m: unknown) => void) | null = null;
       let pending: HTMLElement | null = null;
+      let shown = ''; // text already rendered into the pending bubble
       let voiceTurn = false;
 
       function setStatus(text: string, bad = false): void {
@@ -186,6 +204,27 @@
         return p;
       }
 
+      // Follow the stream only while the reader is at the bottom; scrolling
+      // up to reread must not be fought.
+      function atBottom(): boolean {
+        return thread.scrollHeight - thread.scrollTop - thread.clientHeight < 64;
+      }
+
+      // New characters fade in one by one instead of the whole answer
+      // snapping on every partial.
+      function rollIn(el: HTMLElement, delta: string): void {
+        const frag = document.createDocumentFragment();
+        let i = 0;
+        for (const ch of delta) {
+          const s = document.createElement('span');
+          s.className = 'roll';
+          s.textContent = ch;
+          s.style.animationDelay = `${Math.min(i++, 24) * 12}ms`;
+          frag.append(s);
+        }
+        el.append(frag);
+      }
+
       function speakIfVoice(text: string): void {
         if (!voiceTurn) return;
         voiceTurn = false;
@@ -200,6 +239,7 @@
         if (!send) return;
         addTurn('lk-you', `You · ${q}`);
         pending = addTurn('lk-agent', '…');
+        shown = '';
         send({ t: 'ask', text: q });
       }
 
@@ -221,12 +261,22 @@
           },
           onMessage: (m) => {
             if (m.t === 'partial' && typeof m.text === 'string' && pending) {
-              pending.textContent = m.text;
-              thread.scrollTop = thread.scrollHeight;
+              const stick = atBottom();
+              if (!shown) pending.textContent = ''; // clear the … placeholder
+              if (m.text.startsWith(shown)) {
+                rollIn(pending, m.text.slice(shown.length));
+              } else {
+                pending.textContent = '';
+                rollIn(pending, m.text);
+              }
+              shown = m.text;
+              if (stick) thread.scrollTop = thread.scrollHeight;
             } else if (m.t === 'final' && typeof m.text === 'string') {
-              if (pending) pending.textContent = m.text;
+              const stick = atBottom();
+              if (pending) pending.textContent = m.text; // flatten spans for clean select/copy
               pending = null;
-              thread.scrollTop = thread.scrollHeight;
+              shown = '';
+              if (stick) thread.scrollTop = thread.scrollHeight;
               speakIfVoice(m.text);
             } else if (m.t === 'status' && typeof m.text === 'string') {
               setStatus(m.text);

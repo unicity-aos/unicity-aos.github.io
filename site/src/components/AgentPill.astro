@@ -461,6 +461,23 @@
     }
   }
 
+  /* streamed characters fade in rather than snap-appearing */
+  .pill-results :global(.answer .roll) {
+    animation: roll-in 0.3s ease-out both;
+  }
+
+  @keyframes roll-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pill-results :global(.answer .roll) {
+      animation: none;
+    }
+  }
+
   /* the phone uplink: QR + status live in the panel's footer */
   .pill-link {
     margin-top: var(--s-2);
@@ -477,10 +494,19 @@
     border-radius: 8px;
   }
 
+  /* display:block above would defeat the hidden attribute once linked */
+  #pill-qr[hidden] {
+    display: none;
+  }
+
   .pill-link-note {
     font-size: 0.72rem;
     line-height: 1.5;
     text-align: center;
+  }
+
+  .pill-link-note[data-ok] {
+    color: var(--bus);
   }
 
   @media (max-width: 640px) {
@@ -591,7 +617,7 @@
     if (!panel.hidden || input.value) return;
     if (transcript.length) {
       showPanel();
-      renderTranscript();
+      renderTranscript(true);
       return;
     }
     const section = currentSection();
@@ -840,7 +866,7 @@
         const p = JSON.parse(json) as { text?: string; session_id?: string };
         if (p.session_id !== FLEET_SESSION || !p.text) return;
         fleetTurn.text = fleetTurn.text === '…' ? p.text : fleetTurn.text + p.text;
-        renderTranscript();
+        updateStream(fleetTurn.text);
         linkSend?.({ t: 'partial', text: fleetTurn.text });
       } catch {
         /* delta parse is best-effort; the terminal reply is authoritative */
@@ -855,7 +881,7 @@
         const p = JSON.parse(json) as { text?: string };
         if (!p.text) return;
         fleetTurn.text = p.text;
-        renderTranscript();
+        updateStream(p.text);
         linkSend?.({ t: 'partial', text: p.text });
       } catch {
         /* partials are best-effort; the terminal reply is authoritative */
@@ -877,13 +903,59 @@
     });
   }
 
-  function renderTranscript(): void {
+  // Streaming text rolls into the last answer in place, character by
+  // character, instead of re-snapping the whole transcript on every delta.
+  let streamEl: HTMLElement | null = null;
+  let streamShown = '';
+
+  function rollIn(el: HTMLElement, delta: string): void {
+    const frag = document.createDocumentFragment();
+    let i = 0;
+    for (const ch of delta) {
+      const s = document.createElement('span');
+      s.className = 'roll';
+      s.textContent = ch;
+      s.style.animationDelay = `${Math.min(i++, 24) * 12}ms`;
+      frag.append(s);
+    }
+    el.append(frag);
+  }
+
+  // Follow the stream only while the reader is at the bottom; scrolling up
+  // to reread must not be fought.
+  function atBottom(): boolean {
+    return panel.scrollHeight - panel.scrollTop - panel.clientHeight < 64;
+  }
+
+  function updateStream(text: string): void {
+    if (!streamEl?.isConnected) {
+      renderTranscript();
+      return;
+    }
+    const stick = atBottom();
+    if (text.startsWith(streamShown)) {
+      rollIn(streamEl, text.slice(streamShown.length));
+    } else {
+      streamEl.textContent = '';
+      rollIn(streamEl, text);
+    }
+    streamShown = text;
+    if (stick) panel.scrollTop = panel.scrollHeight;
+  }
+
+  function renderTranscript(force = false): void {
+    const stick = force || atBottom();
     results.innerHTML = '';
+    streamEl = null;
     for (const t of transcript) {
       const p = document.createElement('p');
       p.className = t.role === 'user' ? 'turn-you mono' : 'answer';
       p.textContent = t.role === 'user' ? `You · ${t.text}` : t.text;
       results.append(p);
+      if (t.role === 'assistant') {
+        streamEl = p;
+        streamShown = t.text;
+      }
       if (t.refs?.length) {
         const ctx = document.createElement('p');
         ctx.className = 'ctx mono';
@@ -899,7 +971,7 @@
         results.append(ctx);
       }
     }
-    panel.scrollTop = panel.scrollHeight;
+    if (stick) panel.scrollTop = panel.scrollHeight;
   }
 
   // One ask path for every entrance — typed, spoken, or arriving from the
@@ -914,7 +986,7 @@
       transcript.push({ role: 'user', text: q });
       fleetTurn = { role: 'assistant', text: '…' };
       transcript.push(fleetTurn);
-      renderTranscript();
+      renderTranscript(true);
       // fleetAsk retrieves book grounding first (it rides in the system
       // prompt), then publishes the turn; the refs it returns are the
       // chapters the answer is grounded in. Capture the turn locally:
@@ -940,14 +1012,14 @@
         refs: chapters.map((c) => ({ slug: c.slug, title: c.title })),
       };
       transcript.push(reply);
-      renderTranscript();
+      renderTranscript(true);
       try {
         // The return value matters: mid-stream the strict think-strip can
         // leave the bubble empty, and the final text salvages that case.
         const answer = await askAgent(bridge, q, chapters, history, (full) => {
           if (full) {
             reply.text = full;
-            renderTranscript();
+            updateStream(full);
             linkSend?.({ t: 'partial', text: full });
           }
         });
@@ -1122,11 +1194,13 @@
         onStatus: (s, detail) => {
           if (s === 'connected') {
             canvas.hidden = true;
-            linkStatusEl.textContent =
-              'Phone linked. It can only ask; the model, the OS, and the record stay right here.';
+            linkStatusEl.dataset.ok = '1';
+            linkStatusEl.textContent = '✓ Phone linked';
           } else if (s === 'failed') {
+            delete linkStatusEl.dataset.ok;
             linkStatusEl.textContent = `The link failed: ${detail ?? 'the connection never formed'}.`;
           } else if (s === 'closed') {
+            delete linkStatusEl.dataset.ok;
             canvas.hidden = false;
             linkStatusEl.textContent = 'Phone disconnected. The code still works to reconnect.';
           }

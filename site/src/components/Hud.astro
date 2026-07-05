@@ -26,10 +26,10 @@
   <h3 class="mono dim">Installed capsules</h3>
   <ul id="hud-capsules" class="hud-capsules mono"></ul>
   <p class="hud-note dim hud-capsule-note">
-    These are real Rust capsules (astrid-sdk, compiled to WebAssembly) running
-    the page's behaviour. Uninstall one and the part of the page it powers
-    stops. Install and uninstall mint and revoke real capability tokens on the
-    audit chain. Native installs additionally verify publisher signatures.
+    Rust capsules (astrid-sdk, compiled to WebAssembly) running the page's
+    behaviour. Uninstall one and the part of the page it powers stops.
+    Install and uninstall mint and revoke capability tokens on the audit
+    chain. Native installs additionally verify publisher signatures.
   </p>
   <button class="hud-model-remove mono" id="hud-model-remove" hidden>
     Remove the downloaded AI model from this browser
@@ -37,10 +37,12 @@
   <h3 class="mono dim">Audit tail</h3>
   <ol id="hud-audit" class="hud-audit mono" reversed></ol>
   <p class="hud-note dim">
-    This is not a mock. Open devtools → Network and look for
-    <code>kernel_web_bg.wasm</code>: the same <code>astrid-kernel</code> crate
-    the daemon ships, compiled to <code>wasm32-unknown-unknown</code>, booted
-    in this tab.
+    This page is static — GitHub Pages, no backend, no demo server. Astrid is
+    not: open devtools → Network and find <code>kernel_web_bg.wasm</code>, the
+    same <code>astrid-kernel</code> crate the daemon ships, booted in this
+    tab. Every check and every audit entry here is the runtime enforcing its
+    own rules — which is the point. Astrid's security model is not a cloud
+    promise; it holds wherever the runtime runs, including here.
   </p>
 </aside>
 

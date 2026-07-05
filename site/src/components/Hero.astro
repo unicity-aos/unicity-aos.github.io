@@ -239,7 +239,7 @@
     const bridge = kernel();
     claim.dataset.state = status;
     if (status === 'online' && bridge) {
-      text.textContent = 'This page is running the real Astrid, live, right now';
+      text.textContent = 'This page is static. Astrid is not — it’s running in this tab right now';
     } else if (status === 'offline') {
       text.textContent = 'Astrid can’t run in this browser · showing the story without the live demo';
     }
