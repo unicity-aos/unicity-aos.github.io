@@ -15,10 +15,10 @@ async function loadUnicityFonts(): Promise<void> {
   fontsLoaded = true;
   // The fonts only ever download for visitors who flip the switch.
   await Promise.all([
-    import('@fontsource/anton'),
-    import('@fontsource/geist-sans'),
+    import('@fontsource/anton/400.css'),
+    import('@fontsource/geist-sans/400.css'),
     import('@fontsource/geist-sans/600.css'),
-    import('@fontsource/geist-mono'),
+    import('@fontsource/geist-mono/400.css'),
   ]);
 }
 

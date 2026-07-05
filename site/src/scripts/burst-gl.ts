@@ -75,6 +75,11 @@ in float vR;
 uniform float uTime;
 // live bus energy: recent kernel events make the accent planks glow
 uniform float uEnergy;
+// the plank palette rides uniforms so the brand toggle re-dresses the eye
+uniform vec3 uBaseLo;
+uniform vec3 uBaseHi;
+uniform vec3 uAccA;
+uniform vec3 uAccB;
 out vec4 outColor;
 
 float hash(vec2 p) {
@@ -82,11 +87,11 @@ float hash(vec2 p) {
 }
 
 void main() {
-  // monochrome violet-greys; definition comes from the lighting, like the
+  // monochrome ramp; definition comes from the lighting, like the
   // reference. A sparse few planks carry the bus/audit accents.
-  vec3 base = mix(vec3(0.10, 0.11, 0.17), vec3(0.30, 0.31, 0.47), vShade);
-  if (vAccent > 1.5) base = vec3(0.30, 0.55, 0.52) * (1.0 + uEnergy * 0.7);
-  else if (vAccent > 0.5) base = vec3(0.55, 0.44, 0.82) * (1.0 + uEnergy * 0.7);
+  vec3 base = mix(uBaseLo, uBaseHi, vShade);
+  if (vAccent > 1.5) base = uAccA * (1.0 + uEnergy * 0.7);
+  else if (vAccent > 0.5) base = uAccB * (1.0 + uEnergy * 0.7);
   // wide dynamic range: shadowed faces sink toward the bg, lit faces glow
   vec3 col = base * (0.26 + 1.15 * vLight);
   // surface tooth; the full-frame film grain is a separate pass
@@ -140,6 +145,7 @@ precision highp float;
 in vec2 vUv;
 uniform float uTime;
 uniform float uAlpha;
+uniform vec3 uTint;
 out vec4 outColor;
 
 float hash(vec2 p) {
@@ -148,10 +154,42 @@ float hash(vec2 p) {
 
 void main() {
   float g = hash(gl_FragCoord.xy + fract(uTime * 1.13) * 47.3);
-  // cool-toned speckle, alpha-weighted so it reads as grain, not fog; it
+  // brand-tinted speckle, alpha-weighted so it reads as grain, not fog; it
   // quietens with the eye so text sections never sit under full grain
-  outColor = vec4(vec3(0.62, 0.64, 0.78), g * g * 0.085 * uAlpha);
+  outColor = vec4(uTint, g * g * 0.085 * uAlpha);
 }`;
+
+// The eye's plumage, per brand. Astrid: violet-grey planks, teal/violet
+// accents, cool grain. Unicity: burnt-to-bright orange planks on the orange
+// field (their own hero motif), white and ink-black accents, warm grain.
+interface Palette {
+  lo: [number, number, number];
+  hi: [number, number, number];
+  a: [number, number, number];
+  b: [number, number, number];
+  grain: [number, number, number];
+}
+
+const PALETTES: Record<'astrid' | 'unicity', Palette> = {
+  astrid: {
+    lo: [0.10, 0.11, 0.17],
+    hi: [0.30, 0.31, 0.47],
+    a: [0.30, 0.55, 0.52],
+    b: [0.55, 0.44, 0.82],
+    grain: [0.62, 0.64, 0.78],
+  },
+  unicity: {
+    lo: [0.50, 0.20, 0.0],
+    hi: [0.85, 0.37, 0.02],
+    a: [0.98, 0.95, 0.90],
+    b: [0.114, 0.114, 0.114],
+    grain: [1.0, 0.88, 0.76],
+  },
+};
+
+function currentPalette(): Palette {
+  return PALETTES[document.documentElement.dataset.brand === 'unicity' ? 'unicity' : 'astrid'];
+}
 
 const rand = (i: number, salt: number): number => {
   const x = Math.sin(i * 127.1 + salt * 311.7) * 43758.5453;
@@ -387,12 +425,17 @@ export function startBurst(
   const uTime = gl.getUniformLocation(prog, 'uTime');
   const uWheel = gl.getUniformLocation(prog, 'uWheel');
   const uEnergy = gl.getUniformLocation(prog, 'uEnergy');
+  const uBaseLo = gl.getUniformLocation(prog, 'uBaseLo');
+  const uBaseHi = gl.getUniformLocation(prog, 'uBaseHi');
+  const uAccA = gl.getUniformLocation(prog, 'uAccA');
+  const uAccB = gl.getUniformLocation(prog, 'uAccB');
   const uBlurTex = gl.getUniformLocation(blurProg, 'uTex');
   const uBlurStep = gl.getUniformLocation(blurProg, 'uStep');
   const uBlitTex = gl.getUniformLocation(blitProg, 'uTex');
   const uBlitAlpha = gl.getUniformLocation(blitProg, 'uAlpha');
   const uGrainTime = grainProg ? gl.getUniformLocation(grainProg, 'uTime') : null;
   const uGrainAlpha = grainProg ? gl.getUniformLocation(grainProg, 'uAlpha') : null;
+  const uGrainTint = grainProg ? gl.getUniformLocation(grainProg, 'uTint') : null;
   const emptyVao = gl.createVertexArray(); // for attributeless fullscreen tris
 
   // the gaze is live: rx(pitch)·ry(yaw), rebuilt per frame from the pose so
@@ -474,6 +517,15 @@ export function startBurst(
   const ro = new ResizeObserver(resize);
   ro.observe(canvas);
 
+  // the palette follows the brand toggle live; under reduced motion the
+  // loop rests after one frame, so a brand change must wake it for one more
+  let pal = currentPalette();
+  const onBrand = () => {
+    pal = currentPalette();
+    if (still && !stopped) raf = requestAnimationFrame(frame);
+  };
+  document.addEventListener('brandchange', onBrand);
+
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let visible = true;
   const io = new IntersectionObserver((entries) => {
@@ -535,6 +587,10 @@ export function startBurst(
         gl.useProgram(prog);
         gl.uniform1f(uTime, t);
         gl.uniform1f(uEnergy, energy);
+        gl.uniform3fv(uBaseLo, pal.lo);
+        gl.uniform3fv(uBaseHi, pal.hi);
+        gl.uniform3fv(uAccA, pal.a);
+        gl.uniform3fv(uAccB, pal.b);
         gl.uniform1f(uScale, P.scale);
         gl.uniformMatrix3fv(uTilt, false, tiltOf(pitch, yaw));
         gl.uniform3fv(uCenter, centre);
@@ -586,6 +642,7 @@ export function startBurst(
         gl.useProgram(grainProg);
         gl.uniform1f(uGrainTime, t);
         gl.uniform1f(uGrainAlpha, P.alpha);
+        gl.uniform3fv(uGrainTint, pal.grain);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
       if (still) return; // one composed frame, then rest
@@ -598,6 +655,7 @@ export function startBurst(
     stop() {
       stopped = true;
       cancelAnimationFrame(raf);
+      document.removeEventListener('brandchange', onBrand);
       ro.disconnect();
       io.disconnect();
       gl.getExtension('WEBGL_lose_context')?.loseContext();
