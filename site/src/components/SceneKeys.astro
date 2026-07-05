@@ -48,9 +48,9 @@ const KEY_ROWS: { who: string; note: string; keys: KeyDef[] }[] = [
 
 const captions = [
   'Your agent wants help. Before it lifts a finger, you decide which keys it may copy.',
-  'You cut it three copies. Your passwords aren’t one of them — no copy of that key exists outside your hand.',
+  'You cut it three copies. Your passwords aren’t one of them: no copy of that key exists outside your hand.',
   'It hires a helper and cuts the helper two. It cannot cut a key it doesn’t hold.',
-  'The helper’s helper gets one. Down the whole chain, keys only ever get fewer — nothing below you can hold a key you don’t.',
+  'The helper’s helper gets one. Down the whole chain, keys only ever get fewer. Nothing below you can hold a key you don’t.',
 ];
 ---
 
@@ -64,7 +64,7 @@ const captions = [
           {captions.map((c, i) => <p class="keys-caption" data-cap={i}>{c}</p>)}
         </div>
         <p class="keys-closer mono">
-          not a promise in a prompt — the way the machine is built. Try it
+          Not a promise in a prompt. This is how the machine is built. Try it
           yourself, just below.
         </p>
       </div>

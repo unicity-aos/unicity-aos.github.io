@@ -18,12 +18,12 @@ const residents = [
     <p>
       Every agent on Astrid is a resident with its own home: its own storage,
       its own memory, its own keys. Two residents live on this page. Leave
-      each a note, then try to make one read the other's — the OS itself
+      each a note, then try to make one read the other's. The OS itself
       refuses, and the refusal goes on the record like everything else.
     </p>
     <p class="mono live-caption dim">
-      in this tab the wall runs around each resident's key-value home; on a
-      native install the same wall runs around files, secrets, and memory
+      In this tab, the wall runs around each resident's key-value home. On a
+      native install, the same wall runs around files, secrets, and memory.
     </p>
   </div>
 
@@ -261,7 +261,7 @@ const residents = [
         if (!text || !bridge) return;
         void bridge.guestKvSet!(r, home(r), 'note', text).then(() => {
           input.value = '';
-          verdict('ok', `Written into ${r}’s home — a real write, behind a real permission check`);
+          verdict('ok', `Written into ${r}’s home: a real write, behind a real permission check`);
           return refreshNotes();
         });
       });
