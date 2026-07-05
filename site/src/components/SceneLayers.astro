@@ -17,7 +17,7 @@
       watch the guard stop it cold.
     </p>
     <p class="mono live-caption">
-      this isn’t a polite request in a prompt. The guard owns the only door
+      This isn’t a polite request in a prompt. The guard owns the only door
       in; there is no way to be heard without going through it.
     </p>
   </div>
@@ -35,7 +35,7 @@
         class="oval-input mono"
         type="text"
         maxlength="120"
-        placeholder="say something…"
+        placeholder="Say something…"
         autocomplete="off"
         disabled
       />
@@ -209,17 +209,17 @@
     b.subscribe('site.v1.guard.blocked', (_t, json) => {
       try {
         const { reason, redacted } = JSON.parse(json) as { reason: string; redacted: string };
-        push('l-blocked', `guard: ${reason} · "${redacted}"`);
+        push('l-blocked', `Guard: ${reason} · "${redacted}"`);
       } catch {
-        push('l-blocked', 'guard: blocked');
+        push('l-blocked', 'Guard: blocked');
       }
     });
     b.subscribe('site.v1.echo.reply', (_t, json) => {
       try {
         const { reply, seen } = JSON.parse(json) as { reply: string; seen: number };
-        push('l-reply', `echo: ${reply} (message #${seen} it has seen)`);
+        push('l-reply', `Echo: ${reply} (message #${seen} it has seen)`);
       } catch {
-        push('l-reply', 'echo replied');
+        push('l-reply', 'Echo replied');
       }
     });
   });
@@ -229,7 +229,7 @@
     const echoOn = capsuleState('site-echo') === 'installed';
     applyState();
     if (capsuleState('site-guard') !== 'unavailable' && !guardOn && echoOn) {
-      push('l-note', 'the guard is uninstalled: your raw input now reaches nobody. echo only listens to the guarded topic.');
+      push('l-note', 'The guard is uninstalled: your raw input now reaches nobody. Echo only listens to the guarded topic.');
     }
   });
 
@@ -241,7 +241,7 @@
       e.preventDefault();
       const text = input.value.trim();
       if (!text || !bridge) return;
-      push('l-you', `you: ${text}`);
+      push('l-you', `You: ${text}`);
       void bridge.publish('site.v1.input.text', JSON.stringify({ text }));
       input.value = '';
       input.focus();

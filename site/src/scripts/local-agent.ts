@@ -149,7 +149,7 @@ export async function enableAgent(
 ): Promise<boolean> {
   if (engine) return true;
   if (!webGpuAvailable()) {
-    publishStatus(bridge, 'unsupported', 'WebGPU not available in this browser');
+    publishStatus(bridge, 'unsupported', 'WebGPU is not available in this browser');
     return false;
   }
   const webllm = await import('@mlc-ai/web-llm');
@@ -157,7 +157,7 @@ export async function enableAgent(
   const candidates = [first, fallbackFor(first)].filter((m): m is string => m !== null);
   let lastErr: unknown = null;
   for (const model of candidates) {
-    publishStatus(bridge, 'loading', `downloading ${model}`);
+    publishStatus(bridge, 'loading', `Downloading ${model}`);
     try {
       engine = (await webllm.CreateMLCEngine(
         model,
@@ -173,7 +173,7 @@ export async function enableAgent(
         chatOptsFor(model),
       )) as unknown as Engine;
       picked = model; // keep removeModel and the fleet in sync with reality
-      publishStatus(bridge, 'ready', 'local model loaded, running on your GPU');
+      publishStatus(bridge, 'ready', 'Local model loaded — running on your GPU');
       return true;
     } catch (err) {
       engine = null;
@@ -184,7 +184,7 @@ export async function enableAgent(
   publishStatus(
     bridge,
     'off',
-    `model load failed: ${lastErr instanceof Error ? lastErr.message : lastErr}`,
+    `Model load failed: ${lastErr instanceof Error ? lastErr.message : lastErr}`,
   );
   return false;
 }
@@ -228,7 +228,7 @@ export async function removeModel(bridge: AstridBridge): Promise<void> {
       /* absent = already clean */
     }
   }
-  publishStatus(bridge, 'off', 'model removed from this browser — nothing left behind');
+  publishStatus(bridge, 'off', 'Model removed from this browser — nothing left behind');
 }
 
 /**
@@ -246,7 +246,7 @@ export async function connectEndpoint(bridge: AstridBridge, e: AgentEndpoint): P
   if (e.flavor === 'anthropic') {
     // Anthropic's browser opt-in path: different auth headers, and the
     // model list lives at /v1/models off the API root.
-    if (!e.key) throw new Error('an Anthropic key is required');
+    if (!e.key) throw new Error('An Anthropic key is required');
     const res = await fetch(`${typed}/v1/models`, {
       headers: {
         'x-api-key': e.key,
@@ -256,19 +256,19 @@ export async function connectEndpoint(bridge: AstridBridge, e: AgentEndpoint): P
     });
     if (!res.ok) throw new Error(`Anthropic answered ${res.status} — check the key`);
     endpoint = { ...e, base: typed };
-    publishStatus(bridge, 'ready', `your model · Anthropic · ${e.model || 'claude-haiku-4-5'}`);
+    publishStatus(bridge, 'ready', `Your model · Anthropic · ${e.model || 'claude-haiku-4-5'}`);
     return;
   }
   const headers: Record<string, string> = {};
   if (e.key) headers.Authorization = `Bearer ${e.key}`;
   const candidates = /\/v\d+$/.test(typed) ? [typed] : [typed, `${typed}/v1`];
   let base: string | null = null;
-  let lastError = 'endpoint did not answer';
+  let lastError = 'The endpoint did not answer';
   for (const c of candidates) {
     try {
       const res = await fetch(`${c}/models`, { headers });
       if (!res.ok) {
-        lastError = `endpoint answered ${res.status} on ${c}/models`;
+        lastError = `Endpoint answered ${res.status} on ${c}/models`;
         continue;
       }
       const json = (await res.json()) as { data?: unknown };
@@ -285,12 +285,12 @@ export async function connectEndpoint(bridge: AstridBridge, e: AgentEndpoint): P
   if (!base) throw new Error(lastError);
   endpoint = { ...e, base };
   const name = e.label || new URL(base).host;
-  publishStatus(bridge, 'ready', `your model · ${name}${e.model ? ` · ${e.model}` : ''}`);
+  publishStatus(bridge, 'ready', `Your model · ${name}${e.model ? ` · ${e.model}` : ''}`);
 }
 
 export function disconnectEndpoint(bridge: AstridBridge): void {
   endpoint = null;
-  publishStatus(bridge, engine ? 'ready' : 'off', engine ? 'back to the in-tab model' : 'endpoint disconnected');
+  publishStatus(bridge, engine ? 'ready' : 'off', engine ? 'Back to the in-tab model' : 'Endpoint disconnected');
 }
 
 /** One generate path for both brains; onDelta receives the running text. */
@@ -342,7 +342,7 @@ async function generate(
         }),
       });
     }
-    if (!res.ok || !res.body) throw new Error(`endpoint answered ${res.status}`);
+    if (!res.ok || !res.body) throw new Error(`Endpoint answered ${res.status}`);
     // SSE: `data: {...}` lines, terminated by `data: [DONE]`. Events can
     // split across network chunks, so buffer to the last newline.
     const reader = res.body.getReader();
@@ -382,7 +382,7 @@ async function generate(
     }
     return stripThink(raw);
   }
-  if (!engine) throw new Error('no model: download one or connect an endpoint');
+  if (!engine) throw new Error('No model: download one or connect an endpoint');
   let raw = '';
   let n = 0;
   // The penalties are load-bearing: 1B-class quantized models at low
@@ -417,7 +417,7 @@ export async function completeOpenAi(
   messages: { role: string; content: string }[],
   maxTokens: number,
 ): Promise<string> {
-  publishStatus(bridge, 'thinking', 'fleet turn');
+  publishStatus(bridge, 'thinking', 'Fleet turn');
   let last = 0;
   const full = await generate(messages, maxTokens, (t, n) => {
     if (n - last >= 4) {
@@ -428,7 +428,7 @@ export async function completeOpenAi(
       void bridge.publish('site.agent.v1.partial', JSON.stringify({ text: t }));
     }
   });
-  publishStatus(bridge, 'ready', 'fleet turn finished');
+  publishStatus(bridge, 'ready', 'Fleet turn finished');
   return full;
 }
 
@@ -465,6 +465,6 @@ export async function askAgent(
     if (n % 8 === 0) void bridge.publish('site.agent.v1.token', JSON.stringify({ n }));
     onToken(text);
   });
-  publishStatus(bridge, 'ready', `answered in ${tokens} tokens`);
+  publishStatus(bridge, 'ready', `Answered in ${tokens} tokens`);
   return full;
 }

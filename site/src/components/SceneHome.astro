@@ -32,13 +32,13 @@ const residents = [
       residents.map((r) => (
         <div class="card home-card" data-dock={r.id}>
           <p class="mono home-name">{r.label}’s home</p>
-          <p class="mono home-note dim" id={`home-note-${r.id}`}>no note yet</p>
+          <p class="mono home-note dim" id={`home-note-${r.id}`}>No note yet</p>
           <form class="home-form" data-resident={r.id}>
             <input
               class="mono home-input"
               type="text"
               maxlength="60"
-              placeholder={`leave ${r.label} a note…`}
+              placeholder={`Leave ${r.label} a note…`}
               autocomplete="off"
               disabled
             />
@@ -48,7 +48,7 @@ const residents = [
       ))
     }
     <button class="mono home-trespass" id="home-trespass" disabled>
-      make kestrel read aria’s note →
+      Make kestrel read aria’s note →
     </button>
     <p class="mono home-verdict" id="home-verdict" aria-live="polite"></p>
   </div>
@@ -229,7 +229,7 @@ const residents = [
       if (!el) continue;
       try {
         const v = await bridge.guestKvGet!(r, home(r), 'note');
-        el.textContent = v ? `“${v}”` : 'no note yet';
+        el.textContent = v ? `“${v}”` : 'No note yet';
       } catch {
         /* own-home reads are granted; leave the last rendering */
       }
@@ -261,7 +261,7 @@ const residents = [
         if (!text || !bridge) return;
         void bridge.guestKvSet!(r, home(r), 'note', text).then(() => {
           input.value = '';
-          verdict('ok', `written into ${r}’s home — a real write, behind a real permission check`);
+          verdict('ok', `Written into ${r}’s home — a real write, behind a real permission check`);
           return refreshNotes();
         });
       });
@@ -274,7 +274,7 @@ const residents = [
           // kestrel attempts aria's home: a REAL read through the same
           // surface the legitimate reads use. No capability covers it.
           await bridge.guestKvGet!('kestrel', home('aria'), 'note');
-          verdict('ok', 'read allowed?! — report this, it should be impossible');
+          verdict('ok', 'Read allowed?! — report this, it should be impossible');
         } catch {
           bump('denied');
           verdict(

@@ -9,21 +9,21 @@
 
 <button id="hud" class="hud mono" aria-expanded="false" aria-controls="hud-drawer" title="What's running this page">
   <span id="hud-dot" class="hud-dot" data-state="booting" aria-hidden="true"></span>
-  <span id="hud-text">waking Astrid…</span>
+  <span id="hud-text">Waking Astrid…</span>
 </button>
 
 <aside id="hud-drawer" class="hud-drawer card" hidden>
   <header class="hud-drawer-head">
-    <h2 class="mono">under the hood</h2>
+    <h2 class="mono">Under the hood</h2>
     <button id="hud-close" class="hud-close mono" aria-label="Close panel">✕</button>
   </header>
   <dl class="hud-facts mono">
-    <div><dt>state</dt><dd id="hud-f-state">booting</dd></div>
-    <div><dt>build</dt><dd id="hud-f-build">–</dd></div>
-    <div><dt>events routed</dt><dd id="hud-f-events">–</dd></div>
-    <div><dt>audit entries</dt><dd id="hud-f-audit">–</dd></div>
+    <div><dt>State</dt><dd id="hud-f-state">Booting</dd></div>
+    <div><dt>Build</dt><dd id="hud-f-build">–</dd></div>
+    <div><dt>Events routed</dt><dd id="hud-f-events">–</dd></div>
+    <div><dt>Audit entries</dt><dd id="hud-f-audit">–</dd></div>
   </dl>
-  <h3 class="mono dim">installed capsules</h3>
+  <h3 class="mono dim">Installed capsules</h3>
   <ul id="hud-capsules" class="hud-capsules mono"></ul>
   <p class="hud-note dim hud-capsule-note">
     These are real Rust capsules (astrid-sdk, compiled to WebAssembly) running
@@ -32,9 +32,9 @@
     audit chain. Native installs additionally verify publisher signatures.
   </p>
   <button class="hud-model-remove mono" id="hud-model-remove" hidden>
-    remove the downloaded AI model from this browser
+    Remove the downloaded AI model from this browser
   </button>
-  <h3 class="mono dim">audit tail</h3>
+  <h3 class="mono dim">Audit tail</h3>
   <ol id="hud-audit" class="hud-audit mono" reversed></ol>
   <p class="hud-note dim">
     This is not a mock. Open devtools → Network and look for
@@ -306,7 +306,7 @@
       $('hud-f-build').textContent = `astrid-kernel@${commit}`;
       startTicker();
     } else if (status === 'offline') {
-      text.textContent = 'not running in this browser';
+      text.textContent = 'Not running in this browser';
     }
   });
 
@@ -316,12 +316,12 @@
       const bridge = kernel();
       if (!bridge) return;
       const events = bridge.eventsRouted();
-      text.textContent = `live · ${events} messages carried`;
+      text.textContent = `Live · ${events} messages carried`;
       $('hud-f-events').textContent = String(events);
       // never fake the audit surface when the browser build lacks it
       $('hud-f-audit').textContent = bridge.auditLen
         ? String(await bridge.auditLen())
-        : 'not in the browser build yet';
+        : 'Not in the browser build yet';
       if (!drawer.hidden) await refreshAudit();
     };
     void tick();
@@ -334,7 +334,7 @@
       const list = $('hud-audit');
       if (!list.childElementCount) {
         const li = document.createElement('li');
-        li.innerHTML = '<span class="action">the audit ledger isn’t readable in the browser build yet</span>';
+        li.innerHTML = '<span class="action">The audit ledger isn’t readable in the browser build yet</span>';
         list.append(li);
       }
       return;
@@ -414,10 +414,10 @@
     const bridge = kernel();
     if (!bridge) return;
     modelBtn.disabled = true;
-    modelBtn.textContent = 'removing…';
+    modelBtn.textContent = 'Removing…';
     void removeModel(bridge).then(
       () => {
-        modelBtn.textContent = 'model removed — nothing left behind';
+        modelBtn.textContent = 'Model removed — nothing left behind';
         setTimeout(() => {
           modelBtn.hidden = true;
         }, 4000);

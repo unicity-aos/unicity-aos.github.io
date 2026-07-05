@@ -163,6 +163,10 @@ main {
   transform: translateY(-1px);
 }
 
+.btn:active {
+  transform: translateY(0) scale(0.97);
+}
+
 .btn-primary {
   background: var(--aurora);
   border: none;
@@ -172,6 +176,7 @@ main {
 
 .btn-primary:hover {
   filter: brightness(1.1);
+  box-shadow: 0 10px 30px -12px color-mix(in srgb, var(--bus) 55%, transparent);
 }
 
 /* cards & hairlines */
@@ -179,6 +184,7 @@ main {
   background: var(--bg-raised);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
+  transition: border-color var(--t-med) var(--ease-out);
 }
 
 .hairline-top {

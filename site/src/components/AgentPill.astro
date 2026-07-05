@@ -18,21 +18,21 @@
       <div class="pill-progress-bar" id="pill-progress-bar"></div>
     </div>
     <p class="pill-mode mono" id="pill-mode">
-      docs lens: this finds chapters, it does not think. the button on the
+      Docs lens: this finds chapters, it does not think. The button on the
       right turns on a real AI that runs entirely in your tab.
     </p>
     <p class="pill-consent mono" id="pill-consent" hidden>
-      the agent runs entirely in your tab (WebGPU) and downloads
-      <span id="pill-size">~450&nbsp;MB</span> of model weights, once; your
-      browser caches them, and you can remove them just as easily (under the
-      hood panel, top right). nothing you type ever leaves this page.
-      <button class="pill-enable mono" id="pill-confirm" type="button">download and run</button>
-      <button class="pill-enable mono" id="pill-alt" type="button">use your own model…</button>
-      <button class="pill-enable mono" id="pill-cancel" type="button">cancel</button>
+      The agent runs entirely in your tab (WebGPU) and downloads
+      <span id="pill-size">~450&nbsp;MB</span> of model weights, once. Your
+      browser caches them, and you can remove them just as easily (Under the
+      hood panel, top right). Nothing you type ever leaves this page.
+      <button class="pill-enable mono" id="pill-confirm" type="button">Download and run</button>
+      <button class="pill-enable mono" id="pill-alt" type="button">Use your own model…</button>
+      <button class="pill-enable mono" id="pill-cancel" type="button">Cancel</button>
     </p>
     <div class="pill-consent mono" id="pill-endpoint" hidden>
       <p class="pill-ep-note">
-        bring a model you already have. keys and URLs live in this tab's
+        Bring a model you already have. Keys and URLs live in this tab's
         memory only, are sent nowhere but the provider you pick, and are
         never saved.
       </p>
@@ -40,15 +40,15 @@
       <div class="pill-ep-row">
         <button class="pill-enable mono" id="pill-ep-anthropic" type="button">Anthropic key…</button>
         <button class="pill-enable mono" id="pill-ep-openai" type="button">OpenAI key…</button>
-        <button class="pill-enable mono" id="pill-ep-custom" type="button">custom URL…</button>
-        <button class="pill-enable mono" id="pill-ep-cancel" type="button">back</button>
+        <button class="pill-enable mono" id="pill-ep-custom" type="button">Custom URL…</button>
+        <button class="pill-enable mono" id="pill-ep-cancel" type="button">Back</button>
       </div>
       <div id="pill-ep-manual" hidden>
         <input class="pill-ep mono" id="pill-ep-url" type="url" placeholder="http://localhost:11434/v1" autocomplete="off" spellcheck="false" />
         <input class="pill-ep mono" id="pill-ep-key" type="password" placeholder="API key (optional)" autocomplete="off" />
-        <input class="pill-ep mono" id="pill-ep-model" type="text" placeholder="model name (optional)" autocomplete="off" spellcheck="false" />
+        <input class="pill-ep mono" id="pill-ep-model" type="text" placeholder="Model name (optional)" autocomplete="off" spellcheck="false" />
         <div>
-          <button class="pill-enable mono" id="pill-ep-connect" type="button">connect</button>
+          <button class="pill-enable mono" id="pill-ep-connect" type="button">Connect</button>
         </div>
       </div>
     </div>
@@ -59,12 +59,12 @@
       id="pill-input"
       class="pill-input mono"
       type="text"
-      placeholder="ask the book…"
+      placeholder="Ask the book…"
       autocomplete="off"
       maxlength="200"
     />
     <button class="pill-ai mono" id="pill-enable" type="button" title="Run a local AI in this tab">
-      ✦ enable AI
+      ✦ Enable AI
     </button>
     <button class="pill-send mono" type="submit" aria-label="Ask">→</button>
   </form>
@@ -80,6 +80,19 @@
     width: min(32rem, calc(100vw - 2 * var(--s-2)));
     display: grid;
     gap: 0.5rem;
+    /* Plays when the kernel unhides the pill: it arrives, not appears. */
+    animation: pill-arrive 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  @keyframes pill-arrive {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(2.2rem) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0) scale(1);
+    }
   }
 
   .pill-form {
@@ -91,10 +104,18 @@
     border-radius: 999px;
     padding: 0.35rem 0.5rem 0.35rem 1rem;
     backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 12px 40px -18px rgb(0 0 0 / 0.55);
+    transition:
+      border-color 0.25s ease,
+      box-shadow 0.35s ease,
+      transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .pill-form:focus-within {
     border-color: var(--bus);
+    box-shadow: 0 16px 48px -16px rgb(0 0 0 / 0.6);
+    transform: translateY(-2px);
   }
 
   .pill-dot {
@@ -113,6 +134,13 @@
   .pill-dot[data-state='thinking'] {
     background: var(--bus);
     animation: pill-blink 1s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pill-wrap,
+    .pill-panel {
+      animation: none;
+    }
   }
 
   @keyframes pill-blink {
@@ -145,8 +173,24 @@
     white-space: nowrap;
   }
 
+  .pill-ai,
+  .pill-send,
+  .pill-enable {
+    transition:
+      border-color 0.2s ease,
+      background-color 0.2s ease,
+      color 0.2s ease,
+      transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
   .pill-ai:hover {
     border-color: var(--capsule);
+    transform: translateY(-1px);
+  }
+
+  .pill-ai:active,
+  .pill-send:active {
+    transform: scale(0.94);
   }
 
   .pill-ai[data-on='true'] {
@@ -201,6 +245,21 @@
     max-height: 40vh;
     overflow-y: auto;
     padding: var(--s-2);
+    transform-origin: bottom center;
+    /* Replays on every unhide (display: none -> block restarts it). */
+    animation: panel-rise 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+    box-shadow: 0 24px 70px -30px rgb(0 0 0 / 0.6);
+  }
+
+  @keyframes panel-rise {
+    from {
+      opacity: 0;
+      transform: translateY(0.9rem) scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
   }
 
   .pill-results {
@@ -426,7 +485,7 @@
     if (!chapters.length) {
       const p = document.createElement('p');
       p.className = 'ctx mono';
-      p.textContent = 'nothing in the book matched that.';
+      p.textContent = 'Nothing in the book matched that.';
       results.append(p);
     }
     for (const c of chapters) {
@@ -476,10 +535,10 @@
     showPanel();
     progressWrap.hidden = false;
     mode.textContent = restoring
-      ? 'restoring the model from your browser cache…'
-      : 'starting download…';
+      ? 'Restoring the model from your browser cache…'
+      : 'Starting download…';
     mode.hidden = false;
-    chip.textContent = '✦ loading…';
+    chip.textContent = '✦ Loading…';
     void enableAgent(bridge, (text, progress) => {
       mode.textContent = text;
       progressBar.style.width = `${Math.round(progress * 100)}%`;
@@ -489,12 +548,12 @@
         localStorage.setItem(OPTIN_KEY, '1');
         chip.dataset.on = 'true';
         chip.textContent = '✦ AI on';
-        input.placeholder = 'ask the agent…';
+        input.placeholder = 'Ask the agent…';
         mode.textContent =
-          'local agent running in your tab. answers are grounded in the book and it travels with you across pages.';
+          'Local agent running in your tab. Answers are grounded in the book, and it travels with you across pages.';
       } else {
-        chip.textContent = '✦ enable AI';
-        mode.textContent = 'model load failed; the docs lens still works.';
+        chip.textContent = '✦ Enable AI';
+        mode.textContent = 'Model load failed; the docs lens still works.';
       }
     });
   }
@@ -511,17 +570,17 @@
   function connectBrought(e: Parameters<typeof connectEndpoint>[1], from: string): void {
     if (!bridge) return;
     mode.hidden = false;
-    mode.textContent = `checking ${from}…`;
+    mode.textContent = `Checking ${from}…`;
     connectEndpoint(bridge, e).then(
       () => {
         epForm.hidden = true;
         chip.dataset.on = 'true';
         chip.textContent = '✦ AI on';
-        input.placeholder = 'ask the agent…';
-        mode.textContent = `${from} is connected. the key (if any) lives only in this tab’s memory and is sent only to that provider.`;
+        input.placeholder = 'Ask the agent…';
+        mode.textContent = `${from} is connected. The key (if any) lives only in this tab’s memory and is sent only to that provider.`;
       },
       (err: unknown) => {
-        mode.textContent = `could not reach ${from}: ${err instanceof Error ? err.message : err}. check the URL (https or localhost) and any CORS setting on your server.`;
+        mode.textContent = `Could not reach ${from}: ${err instanceof Error ? err.message : err}. Check the URL (https or localhost) and any CORS setting on your server.`;
       },
     );
   }
@@ -543,7 +602,7 @@
           const card = document.createElement('div');
           card.className = 'pill-ep-card';
           const line = document.createElement('span');
-          line.textContent = `looks like ${p.label} is running on this machine — connect it to this site?`;
+          line.textContent = `Looks like ${p.label} is running on this machine — connect it to this site?`;
           const row = document.createElement('div');
           row.className = 'pill-ep-card-row';
           const sel = document.createElement('select');
@@ -557,7 +616,7 @@
           const go = document.createElement('button');
           go.type = 'button';
           go.className = 'pill-enable mono';
-          go.textContent = 'connect →';
+          go.textContent = 'Connect →';
           go.addEventListener('click', () => {
             connectBrought(
               { base: p.base, model: sel.value, flavor: p.flavor, label: p.label },
@@ -721,12 +780,12 @@
     for (const t of transcript) {
       const p = document.createElement('p');
       p.className = t.role === 'user' ? 'turn-you mono' : 'answer';
-      p.textContent = t.role === 'user' ? `you · ${t.text}` : t.text;
+      p.textContent = t.role === 'user' ? `You · ${t.text}` : t.text;
       results.append(p);
       if (t.refs?.length) {
         const ctx = document.createElement('p');
         ctx.className = 'ctx mono';
-        ctx.append('grounded in: ');
+        ctx.append('Grounded in: ');
         t.refs.forEach((r, i) => {
           if (i > 0) ctx.append(' · ');
           const a = document.createElement('a');
@@ -792,14 +851,14 @@
               renderTranscript();
             }
           });
-          reply.text = answer || '(the model returned nothing — ask again?)';
+          reply.text = answer || '(The model returned nothing — ask again?)';
           renderTranscript();
         } catch (err) {
-          reply.text = `agent failed: ${err instanceof Error ? err.message : err}`;
+          reply.text = `Agent failed: ${err instanceof Error ? err.message : err}`;
           renderTranscript();
         }
       } else {
-        renderChapters(chapters, `chapters matching "${q}":`);
+        renderChapters(chapters, `Chapters matching "${q}":`);
       }
     })();
   });

@@ -306,7 +306,7 @@
       return;
     }
     try {
-      document.getElementById('cap-ledger-title')!.textContent = 'audit ledger';
+      document.getElementById('cap-ledger-title')!.textContent = 'Audit ledger';
       document.getElementById('cap-ledger-note')!.hidden = true;
       const entries = JSON.parse(await bridge.auditTail(6)) as Array<Record<string, unknown>>;
       ledger.innerHTML = '';

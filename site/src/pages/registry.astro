@@ -8,21 +8,21 @@
 import Base from '../layouts/Base.astro';
 
 const abilities = [
-  { name: 'memory', note: 'remembers across sessions', on: true },
-  { name: 'the web', note: 'fetch pages, call APIs', on: true },
-  { name: 'your files', note: 'read/write where you allow', on: true },
-  { name: 'run commands', note: 'shell, behind approval', on: false },
-  { name: 'calendar', note: 'read your schedule', on: false },
-  { name: 'email', note: 'draft, never send unasked', on: false },
-  { name: 'discord', note: 'speak in your server', on: false },
-  { name: 'skills', note: 'how-to knowledge packs', on: true },
+  { name: 'Memory', note: 'Remembers across sessions', on: true },
+  { name: 'The web', note: 'Fetch pages, call APIs', on: true },
+  { name: 'Your files', note: 'Read/write where you allow', on: true },
+  { name: 'Run commands', note: 'Shell, behind approval', on: false },
+  { name: 'Calendar', note: 'Read your schedule', on: false },
+  { name: 'Email', note: 'Draft, never send unasked', on: false },
+  { name: 'Discord', note: 'Speak in your server', on: false },
+  { name: 'Skills', note: 'How-to knowledge packs', on: true },
 ];
 
 const registryRows = [
-  { name: 'capsule-http', by: 'unicity', note: 'the web, behind the airlock' },
-  { name: 'capsule-memory', by: 'unicity', note: 'permanent recall' },
-  { name: 'capsule-shell', by: 'unicity', note: 'commands, gated' },
-  { name: 'capsule-chorus', by: 'community', note: 'many models, one voice' },
+  { name: 'capsule-http', by: 'unicity', note: 'The web, behind the airlock' },
+  { name: 'capsule-memory', by: 'unicity', note: 'Permanent recall' },
+  { name: 'capsule-shell', by: 'unicity', note: 'Commands, gated' },
+  { name: 'capsule-chorus', by: 'community', note: 'Many models, one voice' },
 ];
 ---
 
@@ -32,7 +32,7 @@ const registryRows = [
 >
   <main class="reg wrap">
     <header class="reg-head">
-      <p class="eyebrow">the registry · coming soon</p>
+      <p class="eyebrow">The registry · coming soon</p>
       <h1>Build your agent<br />like a loadout.</h1>
       <p class="prose dim reg-lede">
         Pick the abilities. Every one is a sealed capsule with its permissions
@@ -40,7 +40,7 @@ const registryRows = [
         skip the file entirely and slot them straight into a running Astrid.
       </p>
       <p class="mono reg-honesty">
-        concept preview · nothing below is wired up yet — what you CAN do
+        Concept preview · nothing below is wired up yet — what you CAN do
         today is <a href="/playground/">build a capsule in this tab</a>
       </p>
     </header>
@@ -48,7 +48,7 @@ const registryRows = [
     <div class="reg-ghost" aria-hidden="true">
       <div class="reg-grid">
         <section class="card reg-pick">
-          <p class="mono reg-col-title">01 · pick its abilities</p>
+          <p class="mono reg-col-title">01 · Pick its abilities</p>
           <div class="reg-chips">
             {
               abilities.map((a) => (
@@ -63,31 +63,31 @@ const registryRows = [
         </section>
 
         <section class="card reg-bundle">
-          <p class="mono reg-col-title">02 · take it home</p>
+          <p class="mono reg-col-title">02 · Take it home</p>
           <div class="reg-file mono">
             <span class="reg-file-icon">▣</span>
             <span class="reg-file-name">wanderer.distro</span>
             <span class="reg-file-meta dim">4 capsules · signed · permissions declared</span>
           </div>
           <div class="reg-ctas">
-            <button class="btn btn-primary" disabled>download the file</button>
-            <button class="btn" disabled>slot it into your Astrid →</button>
+            <button class="btn btn-primary" disabled>Download the file</button>
+            <button class="btn" disabled>Slot it into your Astrid →</button>
           </div>
           <p class="mono reg-note dim">
-            one file, ready to install anywhere Astrid runs — or hand it
+            One file, ready to install anywhere Astrid runs — or hand it
             straight to the app and skip the download
           </p>
         </section>
       </div>
 
       <section class="reg-registry">
-        <p class="mono reg-col-title">the shelf · open, signed, owned by no model vendor</p>
+        <p class="mono reg-col-title">The shelf · open, signed, owned by no model vendor</p>
         <div class="reg-rows">
           {
             registryRows.map((r) => (
               <div class="reg-row mono">
                 <span class="reg-row-name">{r.name}</span>
-                <span class="reg-row-by dim">signed · {r.by}</span>
+                <span class="reg-row-by dim">Signed · {r.by}</span>
                 <span class="reg-row-note dim">{r.note}</span>
               </div>
             ))

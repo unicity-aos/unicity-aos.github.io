@@ -9,13 +9,13 @@ const platforms = [
   {
     id: 'claude',
     name: 'Claude',
-    note: 'extension available today',
+    note: 'Extension available today',
     href: 'https://github.com/unicity-astrid',
     cta: 'get it →',
     live: true,
   },
-  { id: 'codex', name: 'Codex', note: 'coming', live: false },
-  { id: 'hermes', name: 'Hermes', note: 'coming', live: false },
+  { id: 'codex', name: 'Codex', note: 'Coming', live: false },
+  { id: 'hermes', name: 'Hermes', note: 'Coming', live: false },
 ];
 ---
 
@@ -68,7 +68,7 @@ const platforms = [
               {p.live && p.href ? (
                 <a class="mono bring-cta" href={p.href}>{p.cta}</a>
               ) : (
-                <span class="mono bring-cta bring-soon">soon</span>
+                <span class="mono bring-cta bring-soon">Soon</span>
               )}
             </div>
           ))
