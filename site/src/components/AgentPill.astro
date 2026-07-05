@@ -568,7 +568,13 @@
   let epLabel: string | undefined;
 
   function connectBrought(e: Parameters<typeof connectEndpoint>[1], from: string): void {
-    if (!bridge) return;
+    if (!bridge) {
+      // Never fail silently: the brought model is fine, it's the OS in this
+      // tab that isn't up (still booting, or this browser can't run it).
+      mode.hidden = false;
+      mode.textContent = `Found ${from}, but the OS in this tab isn't running yet, so there's nothing to connect it to. Wait for the status pill to go live and try again.`;
+      return;
+    }
     mode.hidden = false;
     mode.textContent = `Checking ${from}…`;
     connectEndpoint(bridge, e).then(
