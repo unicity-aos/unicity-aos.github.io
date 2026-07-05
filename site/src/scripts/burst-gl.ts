@@ -189,16 +189,16 @@ const PALETTES: Record<'astrid' | 'unicity', Palette> = {
     light: [0.26, 1.15],
   },
   unicity: {
-    // tone-on-tone like their hero: bars sit just deeper and just brighter
-    // than the #ff6f00 ground, never brown, never black
-    lo: [0.82, 0.32, 0.02],
-    hi: [1.0, 0.56, 0.16],
-    a: [1.0, 0.97, 0.92],
-    b: [0.66, 0.22, 0.01],
+    // tone-on-tone like their hero: bars hug the #ff6f00 ground — the ramp
+    // is deliberately narrow, no deep dark, no paper white, all mid-orange
+    lo: [0.90, 0.38, 0.04],
+    hi: [1.0, 0.52, 0.12],
+    a: [1.0, 0.84, 0.62],
+    b: [0.76, 0.28, 0.02],
     grain: [1.0, 0.85, 0.68],
     // flat poster range: a shallow ambient-to-lit ramp keeps every face
     // inside the orange family
-    light: [0.74, 0.42],
+    light: [0.82, 0.28],
   },
 };
 
