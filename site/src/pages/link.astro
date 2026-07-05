@@ -1,0 +1,311 @@
+---
+/** /link — the phone end of the uplink. Deliberately a dumb terminal: no
+ *  kernel boots here, no model downloads here, nothing persists here. The
+ *  QR on the desktop carried a one-time secret in the URL fragment (which
+ *  never leaves the browser — fragments aren't sent to servers); this page
+ *  uses it to meet the desktop tab over encrypted signaling, then talks to
+ *  it directly over WebRTC. Ask from your hand; the OS, the model, the
+ *  guard, and the record all stay on the desktop. */
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <title>Astrid · phone uplink</title>
+  </head>
+  <body>
+    <main class="link">
+      <header class="link-head">
+        <p class="link-mark">ASTRID · PHONE UPLINK</p>
+        <p class="link-status" id="lk-status">Connecting to your desktop tab…</p>
+      </header>
+      <div class="link-thread" id="lk-thread"></div>
+      <form class="link-form" id="lk-form">
+        <input
+          id="lk-input"
+          type="text"
+          placeholder="Ask your desktop's agent…"
+          autocomplete="off"
+          maxlength="300"
+        />
+        <button id="lk-mic" type="button" hidden aria-label="Ask by voice">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"></rect>
+            <path d="M6 11a6 6 0 0 0 12 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+            <line x1="12" y1="17" x2="12" y2="21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></line>
+          </svg>
+        </button>
+        <button type="submit" aria-label="Send">→</button>
+      </form>
+      <p class="link-foot">
+        This phone is a terminal. The OS, the model, and the record stay on
+        your desktop; this page keeps nothing.
+      </p>
+    </main>
+
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+      }
+
+      body {
+        background: #07080d;
+        color: #e6e9f2;
+        font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+        min-height: 100svh;
+      }
+
+      .link {
+        display: grid;
+        grid-template-rows: auto 1fr auto auto;
+        min-height: 100svh;
+        padding: calc(0.9rem + env(safe-area-inset-top, 0px)) 1rem
+          calc(0.9rem + env(safe-area-inset-bottom, 0px));
+        gap: 0.8rem;
+        max-width: 40rem;
+        margin-inline: auto;
+      }
+
+      .link-mark {
+        font-size: 0.7rem;
+        letter-spacing: 0.22em;
+        color: #8b93a7;
+      }
+
+      .link-status {
+        margin-top: 0.5rem;
+        font-size: 0.78rem;
+        color: #5eead4;
+        line-height: 1.5;
+      }
+
+      .link-status[data-bad] {
+        color: #f87171;
+      }
+
+      .link-thread {
+        overflow-y: auto;
+        display: grid;
+        gap: 0.7rem;
+        align-content: start;
+        font-size: 0.9rem;
+        line-height: 1.55;
+      }
+
+      .lk-you {
+        color: #8b93a7;
+        font-size: 0.8rem;
+      }
+
+      .lk-agent {
+        font-family: system-ui, sans-serif;
+        white-space: pre-wrap;
+      }
+
+      .link-form {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+      }
+
+      .link-form input {
+        flex: 1;
+        min-width: 0;
+        background: #10131c;
+        border: 1px solid #232838;
+        border-radius: 999px;
+        color: inherit;
+        font: inherit;
+        font-size: 0.9rem;
+        padding: 0.7em 1em;
+        outline: none;
+      }
+
+      .link-form input:focus {
+        border-color: #3a4258;
+      }
+
+      .link-form button {
+        flex: none;
+        width: 2.6rem;
+        height: 2.6rem;
+        border-radius: 50%;
+        border: 1px solid #232838;
+        background: #10131c;
+        color: #e6e9f2;
+        font-size: 1rem;
+        display: inline-grid;
+        place-items: center;
+        cursor: pointer;
+      }
+
+      #lk-mic[data-on='true'] {
+        color: #f87171;
+        border-color: #f87171;
+      }
+
+      .link-foot {
+        font-size: 0.68rem;
+        color: #575e70;
+        line-height: 1.5;
+      }
+    </style>
+
+    <script>
+      import { joinLink } from '../scripts/phone-link';
+
+      const $ = (id: string) => document.getElementById(id)!;
+      const status = $('lk-status');
+      const thread = $('lk-thread');
+      const input = $('lk-input') as HTMLInputElement;
+      const micBtn = $('lk-mic') as HTMLButtonElement;
+
+      let send: ((m: unknown) => void) | null = null;
+      let pending: HTMLElement | null = null;
+      let voiceTurn = false;
+
+      function setStatus(text: string, bad = false): void {
+        status.textContent = text;
+        if (bad) status.dataset.bad = '1';
+        else delete status.dataset.bad;
+      }
+
+      function addTurn(cls: string, text: string): HTMLElement {
+        const p = document.createElement('p');
+        p.className = cls;
+        p.textContent = text;
+        thread.append(p);
+        thread.scrollTop = thread.scrollHeight;
+        return p;
+      }
+
+      function speakIfVoice(text: string): void {
+        if (!voiceTurn) return;
+        voiceTurn = false;
+        if (!('speechSynthesis' in window) || !text) return;
+        speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = navigator.language || 'en';
+        speechSynthesis.speak(u);
+      }
+
+      function ask(q: string): void {
+        if (!send) return;
+        addTurn('lk-you', `You · ${q}`);
+        pending = addTurn('lk-agent', '…');
+        send({ t: 'ask', text: q });
+      }
+
+      const secret = location.hash.slice(1);
+      if (!secret) {
+        setStatus(
+          'This page is one half of a pair: open the site on a desktop, click "Use your phone" in the ask bar, and scan the code it shows.',
+          true,
+        );
+      } else {
+        void joinLink(secret, {
+          onStatus: (s, detail) => {
+            if (s === 'waiting') setStatus('Looking for your desktop tab…');
+            else if (s === 'connecting') setStatus('Found it — linking…');
+            else if (s === 'connected')
+              setStatus('Linked to your desktop, phone → tab, directly. Ask away.');
+            else if (s === 'failed') setStatus(`The link failed: ${detail ?? 'no path between the two networks'}.`, true);
+            else if (s === 'closed') setStatus('The desktop closed the link.', true);
+          },
+          onMessage: (m) => {
+            if (m.t === 'partial' && typeof m.text === 'string' && pending) {
+              pending.textContent = m.text;
+              thread.scrollTop = thread.scrollHeight;
+            } else if (m.t === 'final' && typeof m.text === 'string') {
+              if (pending) pending.textContent = m.text;
+              pending = null;
+              thread.scrollTop = thread.scrollHeight;
+              speakIfVoice(m.text);
+            } else if (m.t === 'status' && typeof m.text === 'string') {
+              setStatus(m.text);
+              if (pending) {
+                pending.remove();
+                pending = null;
+              }
+            }
+          },
+        }).then((h) => {
+          send = (m) => h.send(m);
+        });
+      }
+
+      $('lk-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const q = input.value.trim();
+        if (!q || !send) return;
+        voiceTurn = false;
+        input.value = '';
+        ask(q);
+      });
+
+      // voice in, same contract as the desktop pill: spoken question,
+      // spoken answer
+      const srGlobal = window as unknown as {
+        SpeechRecognition?: unknown;
+        webkitSpeechRecognition?: unknown;
+      };
+      const SRCtor = (srGlobal.SpeechRecognition ?? srGlobal.webkitSpeechRecognition) as
+        | (new () => {
+            lang: string;
+            interimResults: boolean;
+            onresult:
+              | ((e: {
+                  results: { length: number; [i: number]: { isFinal: boolean; 0?: { transcript: string } } };
+                }) => void)
+              | null;
+            onend: (() => void) | null;
+            start(): void;
+            stop(): void;
+            abort(): void;
+          })
+        | undefined;
+      let rec: { stop(): void; abort(): void } | null = null;
+      if (SRCtor) micBtn.hidden = false;
+      micBtn.addEventListener('click', () => {
+        if (!SRCtor) return;
+        if (rec) {
+          rec.abort();
+          return;
+        }
+        const r = new SRCtor();
+        rec = r;
+        r.lang = navigator.language || 'en';
+        r.interimResults = true;
+        micBtn.dataset.on = 'true';
+        r.onresult = (e) => {
+          let text = '';
+          let final = false;
+          for (let i = 0; i < e.results.length; i++) {
+            text += e.results[i][0]?.transcript ?? '';
+            if (e.results[i].isFinal) final = true;
+          }
+          input.value = text.trim();
+          if (final && input.value) {
+            const q = input.value;
+            input.value = '';
+            voiceTurn = true;
+            r.stop();
+            ask(q);
+          }
+        };
+        r.onend = () => {
+          rec = null;
+          delete micBtn.dataset.on;
+        };
+        r.start();
+      });
+    </script>
+  </body>
+</html>

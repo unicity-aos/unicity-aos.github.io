@@ -16,9 +16,12 @@
     "@fontsource-variable/space-grotesk": "^5.2.5",
     "@fontsource/ibm-plex-mono": "^5.2.5",
     "@mlc-ai/web-llm": "^0.2.84",
+    "@noble/curves": "^2.2.0",
+    "@noble/hashes": "^2.2.0",
     "astro": "^5.12.0",
     "codemirror": "^6.0.2",
-    "gsap": "^3.13.0"
+    "gsap": "^3.13.0",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",

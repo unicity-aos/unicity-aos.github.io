@@ -52,6 +52,13 @@
         </div>
       </div>
     </div>
+    <div class="pill-link mono" id="pill-link-row">
+      <button class="pill-enable mono" id="pill-phone" type="button">Use your phone →</button>
+      <div id="pill-link-open" hidden>
+        <canvas id="pill-qr" width="0" height="0"></canvas>
+        <p class="pill-link-note dim" id="pill-link-status"></p>
+      </div>
+    </div>
   </div>
   <form class="pill-form" id="pill-form">
     <span class="pill-dot" id="pill-dot" data-state="lens" aria-hidden="true"></span>
@@ -63,6 +70,13 @@
       autocomplete="off"
       maxlength="200"
     />
+    <button class="pill-mic" id="pill-mic" type="button" hidden aria-label="Ask by voice" title="Ask by voice">
+      <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true">
+        <rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor" />
+        <path d="M6 11a6 6 0 0 0 12 0" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+        <line x1="12" y1="17" x2="12" y2="21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+      </svg>
+    </button>
     <button class="pill-ai mono" id="pill-enable" type="button" title="Run a local AI in this tab">
       ✦ Enable AI
     </button>
@@ -407,9 +421,76 @@
     border-color: var(--capsule);
   }
 
+  /* the mic: voice in, when the browser can hear */
+  .pill-mic {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    background: none;
+    border: 1px solid var(--line);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition:
+      color var(--t-fast) var(--ease-out),
+      border-color var(--t-fast) var(--ease-out);
+  }
+
+  .pill-mic:hover {
+    color: var(--text);
+    border-color: var(--line-bright);
+  }
+
+  .pill-mic[data-on='true'] {
+    color: var(--deny);
+    border-color: color-mix(in srgb, var(--deny) 55%, transparent);
+    animation: mic-pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes mic-pulse {
+    50% {
+      box-shadow: 0 0 0 5px color-mix(in srgb, var(--deny) 16%, transparent);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pill-mic[data-on='true'] {
+      animation: none;
+    }
+  }
+
+  /* the phone uplink: QR + status live in the panel's footer */
+  .pill-link {
+    margin-top: var(--s-2);
+    border-top: 1px solid var(--line);
+    padding-top: var(--s-2);
+    font-size: 0.72rem;
+  }
+
+  #pill-qr {
+    display: block;
+    margin: var(--s-2) auto;
+    background: #fff;
+    padding: 8px;
+    border-radius: 8px;
+  }
+
+  .pill-link-note {
+    font-size: 0.72rem;
+    line-height: 1.5;
+    text-align: center;
+  }
+
   @media (max-width: 640px) {
     .pill-wrap {
       width: calc(100vw - 2 * var(--s-2));
+    }
+
+    /* a phone doesn't pair with itself; the QR row is desktop furniture */
+    .pill-link {
+      display: none;
     }
   }
 </style>
@@ -760,6 +841,7 @@
         if (p.session_id !== FLEET_SESSION || !p.text) return;
         fleetTurn.text = fleetTurn.text === '…' ? p.text : fleetTurn.text + p.text;
         renderTranscript();
+        linkSend?.({ t: 'partial', text: fleetTurn.text });
       } catch {
         /* delta parse is best-effort; the terminal reply is authoritative */
       }
@@ -774,6 +856,7 @@
         if (!p.text) return;
         fleetTurn.text = p.text;
         renderTranscript();
+        linkSend?.({ t: 'partial', text: p.text });
       } catch {
         /* partials are best-effort; the terminal reply is authoritative */
       }
@@ -784,8 +867,10 @@
         const p = JSON.parse(json) as { text?: string; is_final?: boolean; session_id?: string };
         if (p.session_id !== FLEET_SESSION || !p.is_final) return;
         fleetTurn.text = p.text ?? fleetTurn.text;
+        const done = fleetTurn.text;
         fleetTurn = null;
         renderTranscript();
+        finishTurn(done);
       } catch {
         /* keep whatever the deltas built */
       }
@@ -817,68 +902,244 @@
     panel.scrollTop = panel.scrollHeight;
   }
 
+  // One ask path for every entrance — typed, spoken, or arriving from the
+  // phone uplink. finishTurn is the single exit: it forwards the final text
+  // to a linked phone and speaks it when the question came in by voice.
+  async function runAsk(q: string): Promise<void> {
+    // Preferred path: the real fleet. user.v1.prompt goes to the real
+    // react capsule, session records the thread, prompt-builder
+    // assembles, openai-compat parses the local model's completion.
+    if (agentState() === 'ready' && bridge && fleetReady()) {
+      wireFleetEvents(bridge);
+      transcript.push({ role: 'user', text: q });
+      fleetTurn = { role: 'assistant', text: '…' };
+      transcript.push(fleetTurn);
+      renderTranscript();
+      // fleetAsk retrieves book grounding first (it rides in the system
+      // prompt), then publishes the turn; the refs it returns are the
+      // chapters the answer is grounded in. Capture the turn locally:
+      // fleetTurn is nulled once the final response lands.
+      const turn = fleetTurn;
+      const chapters = await fleetAsk(FLEET_SESSION, q);
+      if (chapters.length) {
+        turn.refs = chapters.map((c) => ({ slug: c.slug, title: c.title }));
+        renderTranscript();
+      }
+      return; // the final lands in the agent.v1.response subscription
+    }
+    const chapters = await searchBook(q, 3);
+    if (agentState() === 'ready' && bridge) {
+      const history = transcript.map((t) => ({
+        role: t.role,
+        content: t.text,
+      }));
+      transcript.push({ role: 'user', text: q });
+      const reply: Turn = {
+        role: 'assistant',
+        text: '…',
+        refs: chapters.map((c) => ({ slug: c.slug, title: c.title })),
+      };
+      transcript.push(reply);
+      renderTranscript();
+      try {
+        // The return value matters: mid-stream the strict think-strip can
+        // leave the bubble empty, and the final text salvages that case.
+        const answer = await askAgent(bridge, q, chapters, history, (full) => {
+          if (full) {
+            reply.text = full;
+            renderTranscript();
+            linkSend?.({ t: 'partial', text: full });
+          }
+        });
+        reply.text = answer || '(The model returned nothing — ask again?)';
+        renderTranscript();
+        finishTurn(reply.text);
+      } catch (err) {
+        reply.text = `Agent failed: ${err instanceof Error ? err.message : err}`;
+        renderTranscript();
+        finishTurn(reply.text);
+      }
+    } else {
+      renderChapters(chapters, `Chapters matching "${q}":`);
+    }
+  }
+
   $('pill-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const q = input.value.trim();
     if (!q) return;
+    voiceTurn = false; // typed questions get silent answers
     input.value = '';
     showPanel();
-    void (async () => {
-      // Preferred path: the real fleet. user.v1.prompt goes to the real
-      // react capsule, session records the thread, prompt-builder
-      // assembles, openai-compat parses the local model's completion.
-      if (agentState() === 'ready' && bridge && fleetReady()) {
-        wireFleetEvents(bridge);
-        transcript.push({ role: 'user', text: q });
-        fleetTurn = { role: 'assistant', text: '…' };
-        transcript.push(fleetTurn);
-        renderTranscript();
-        // fleetAsk retrieves book grounding first (it rides in the system
-        // prompt), then publishes the turn; the refs it returns are the
-        // chapters the answer is grounded in. Capture the turn locally:
-        // fleetTurn is nulled once the final response lands.
-        const turn = fleetTurn;
-        const chapters = await fleetAsk(FLEET_SESSION, q);
-        if (chapters.length) {
-          turn.refs = chapters.map((c) => ({ slug: c.slug, title: c.title }));
-          renderTranscript();
-        }
-        return;
-      }
-      const chapters = await searchBook(q, 3);
-      if (agentState() === 'ready' && bridge) {
-        const history = transcript.map((t) => ({
-          role: t.role,
-          content: t.text,
-        }));
-        transcript.push({ role: 'user', text: q });
-        const reply: Turn = {
-          role: 'assistant',
-          text: '…',
-          refs: chapters.map((c) => ({ slug: c.slug, title: c.title })),
-        };
-        transcript.push(reply);
-        renderTranscript();
-        try {
-          // The return value matters: mid-stream the strict think-strip can
-          // leave the bubble empty, and the final text salvages that case.
-          const answer = await askAgent(bridge, q, chapters, history, (full) => {
-            if (full) {
-              reply.text = full;
-              renderTranscript();
-            }
-          });
-          reply.text = answer || '(The model returned nothing — ask again?)';
-          renderTranscript();
-        } catch (err) {
-          reply.text = `Agent failed: ${err instanceof Error ? err.message : err}`;
-          renderTranscript();
-        }
-      } else {
-        renderChapters(chapters, `Chapters matching "${q}":`);
-      }
-    })();
+    void runAsk(q);
   });
+
+  function finishTurn(text: string): void {
+    linkBusy = false;
+    linkSend?.({ t: 'final', text });
+    speakIfVoice(text);
+  }
+
+  // ---- voice in (SpeechRecognition) / voice out (speechSynthesis) ----
+  // Shown only where the browser can actually hear; the answer is spoken
+  // only when the question was.
+  const srGlobal = window as unknown as { SpeechRecognition?: unknown; webkitSpeechRecognition?: unknown };
+  const SRCtor = (srGlobal.SpeechRecognition ?? srGlobal.webkitSpeechRecognition) as
+    | (new () => {
+        lang: string;
+        interimResults: boolean;
+        onresult: ((e: { results: { length: number; [i: number]: { isFinal: boolean; 0?: { transcript: string } } } }) => void) | null;
+        onend: (() => void) | null;
+        start(): void;
+        stop(): void;
+        abort(): void;
+      })
+    | undefined;
+  const micBtn = $('pill-mic') as HTMLButtonElement;
+  let rec: { stop(): void; abort(): void } | null = null;
+  let voiceTurn = false;
+  if (SRCtor) micBtn.hidden = false;
+
+  function speakIfVoice(text: string): void {
+    if (!voiceTurn) return;
+    voiceTurn = false;
+    if (!('speechSynthesis' in window) || !text) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = navigator.language || 'en';
+    speechSynthesis.speak(u);
+  }
+
+  micBtn.addEventListener('click', () => {
+    if (!SRCtor) return;
+    if (rec) {
+      rec.abort();
+      return;
+    }
+    const r = new SRCtor();
+    rec = r;
+    const prevPlaceholder = input.placeholder;
+    r.lang = navigator.language || 'en';
+    r.interimResults = true;
+    micBtn.dataset.on = 'true';
+    input.placeholder = 'Listening…';
+    r.onresult = (e) => {
+      let text = '';
+      let final = false;
+      for (let i = 0; i < e.results.length; i++) {
+        text += e.results[i][0]?.transcript ?? '';
+        if (e.results[i].isFinal) final = true;
+      }
+      input.value = text.trim();
+      if (final && input.value) {
+        const q = input.value;
+        input.value = '';
+        voiceTurn = true;
+        r.stop();
+        showPanel();
+        void runAsk(q);
+      }
+    };
+    r.onend = () => {
+      rec = null;
+      delete micBtn.dataset.on;
+      input.placeholder = prevPlaceholder;
+    };
+    r.start();
+  });
+
+  // ---- the phone uplink: QR → encrypted signaling → WebRTC → this bus ----
+  // The phone is a dumb terminal. This side enforces that: exactly one verb
+  // (ask), length-capped, one in flight, behind a real granted-and-checked
+  // capability, with the ask mirrored onto the bus attributed to the uplink
+  // so the rail and the receipt see it.
+  let linkSend: ((m: unknown) => void) | null = null;
+  let linkHandle: { send(m: unknown): void; close(): void } | null = null;
+  let linkGranted = false;
+  let linkBusy = false;
+
+  const phoneBtn = $('pill-phone') as HTMLButtonElement;
+  const linkOpen = $('pill-link-open');
+  const linkStatusEl = $('pill-link-status');
+
+  async function onPhoneAsk(m: Record<string, unknown>): Promise<void> {
+    if (m.t !== 'ask' || typeof m.text !== 'string') return; // one verb, exactly
+    const text = m.text.trim().slice(0, 300);
+    if (!text) return;
+    if (linkBusy) {
+      linkSend?.({ t: 'status', text: 'One question at a time; the last one is still running.' });
+      return;
+    }
+    if (!bridge || agentState() !== 'ready') {
+      linkSend?.({ t: 'status', text: 'No model is enabled on the desktop yet. Click "Enable AI" there first.' });
+      return;
+    }
+    if (!linkGranted) {
+      await bridge.grant('uplink-phone', 'topic:user.v1.prompt', 'write');
+      linkGranted = true;
+    }
+    const ok = await bridge.check('uplink-phone', 'topic:user.v1.prompt', 'write');
+    if (!ok) {
+      linkSend?.({ t: 'status', text: 'The uplink’s permission was revoked on the desktop.' });
+      return;
+    }
+    bridge.hostPublish?.('uplink-phone', 'site.v1.uplink.ask', JSON.stringify({ chars: text.length }));
+    linkSend?.({ t: 'you', text });
+    linkBusy = true;
+    showPanel();
+    try {
+      await runAsk(text);
+    } catch {
+      linkBusy = false;
+    }
+  }
+
+  async function togglePhoneLink(): Promise<void> {
+    if (linkHandle) {
+      linkHandle.close();
+      linkHandle = null;
+      linkSend = null;
+      linkOpen.hidden = true;
+      phoneBtn.textContent = 'Use your phone →';
+      return;
+    }
+    phoneBtn.textContent = '✕ Stop the phone link';
+    linkOpen.hidden = false;
+    linkStatusEl.textContent = 'Setting up…';
+    const canvas = $('pill-qr') as HTMLCanvasElement;
+    canvas.hidden = false;
+    try {
+      const [link, QR] = await Promise.all([import('../scripts/phone-link'), import('qrcode')]);
+      const secret = link.mintSecret();
+      await QR.toCanvas(canvas, `${location.origin}/link/#${secret}`, {
+        width: 164,
+        margin: 0,
+        color: { dark: '#07080d', light: '#ffffff' },
+      });
+      linkStatusEl.textContent =
+        'Scan with your phone camera. The code carries a one-time secret; once linked, your phone talks to this tab directly.';
+      linkHandle = await link.hostLink(secret, {
+        onStatus: (s, detail) => {
+          if (s === 'connected') {
+            canvas.hidden = true;
+            linkStatusEl.textContent =
+              'Phone linked. It can only ask; the model, the OS, and the record stay right here.';
+          } else if (s === 'failed') {
+            linkStatusEl.textContent = `The link failed: ${detail ?? 'the connection never formed'}.`;
+          } else if (s === 'closed') {
+            canvas.hidden = false;
+            linkStatusEl.textContent = 'Phone disconnected. The code still works to reconnect.';
+          }
+        },
+        onMessage: (m) => void onPhoneAsk(m),
+      });
+      linkSend = (msg) => linkHandle?.send(msg);
+    } catch (err) {
+      linkStatusEl.textContent = `Couldn't set up the link: ${err instanceof Error ? err.message : err}`;
+    }
+  }
+
+  phoneBtn.addEventListener('click', () => void togglePhoneLink());
 
   // Click-away closes the panel.
   document.addEventListener('click', (e) => {
