@@ -44,9 +44,14 @@ out float vAccent;
 out float vR;
 
 void main() {
-  // fixed to the path: only the wheel angle moves. The inertia lag makes
-  // planks trail a fast-moving wheel and slide back as it settles.
-  float ang = aSeed.x + uWheel.x - uWheel.y * aSeed.w;
+  // fixed to the path: only the wheel angle moves. The plank is pinned at
+  // its inner anchor and BENDS under motion like a cantilever: the root
+  // follows the wheel almost rigidly, the tip trails by inertia with the
+  // lag growing quadratically along the length. Each vertex rotates by its
+  // own angle, so the flex is a true arc that straightens as the wheel
+  // settles.
+  float lag = clamp(uWheel.y * aSeed.w, -0.8, 0.8);
+  float ang = aSeed.x + uWheel.x - lag * (0.25 + 0.75 * aPos.x * aPos.x);
 
   vec3 local = vec3(aSeed.y + aPos.x * aSeed.z, aPos.y * aDim.x, aPos.z * aDim.y);
   float c = cos(ang), s = sin(ang);
