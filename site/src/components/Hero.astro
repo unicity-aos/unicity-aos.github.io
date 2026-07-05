@@ -21,6 +21,9 @@
       <a class="btn btn-primary" href="#dumb-kernel">See it running</a>
       <a class="btn" href="/book/">How it works</a>
     </div>
+    <a class="hero-works mono" href="#bring">
+      Works with <strong>Claude</strong> today · Codex, Hermes and OpenClaw soon
+    </a>
     <p class="hero-claim mono" id="hero-claim" data-state="booting" data-dock="kernel">
       <span class="hero-claim-dot" aria-hidden="true"></span>
       <span id="hero-claim-text">Waking the real Astrid up in this tab…</span>
@@ -82,7 +85,8 @@
   .hero-inner > .hero-title { animation-delay: 0.14s; }
   .hero-inner > .hero-sub { animation-delay: 0.26s; }
   .hero-inner > .hero-ctas { animation-delay: 0.38s; }
-  .hero-inner > .hero-claim { animation-delay: 0.52s; }
+  .hero-inner > .hero-works { animation-delay: 0.48s; }
+  .hero-inner > .hero-claim { animation-delay: 0.6s; }
 
   @keyframes hero-rise {
     from {
@@ -127,7 +131,33 @@
     display: flex;
     gap: var(--s-2);
     flex-wrap: wrap;
-    margin-bottom: var(--s-5);
+    margin-bottom: var(--s-3);
+  }
+
+  /* The "do I have to switch?" answer, in the first viewport: no. Quiet
+     strip, names on it, deep link to the full bring-yours section. */
+  .hero-works {
+    display: block;
+    width: fit-content;
+    font-size: var(--step--1);
+    color: var(--text-faint);
+    text-decoration: none;
+    margin-bottom: var(--s-4);
+    transition: color var(--t-fast) var(--ease-out);
+  }
+
+  .hero-works strong {
+    color: var(--text-dim);
+    font-weight: 600;
+    transition: color var(--t-fast) var(--ease-out);
+  }
+
+  .hero-works:hover {
+    color: var(--text-dim);
+  }
+
+  .hero-works:hover strong {
+    color: var(--text);
   }
 
   .hero-claim {
