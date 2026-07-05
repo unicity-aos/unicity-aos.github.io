@@ -26,6 +26,7 @@
       <span id="pill-size">~450&nbsp;MB</span> of model weights, once. Your
       browser caches them, and you can remove them just as easily (Under the
       hood panel, top right). Nothing you type ever leaves this page.
+      <span id="pill-wifi" hidden>On mobile data that's a real download — Wi-Fi is kinder.</span>
       <button class="pill-enable mono" id="pill-confirm" type="button">Download and run</button>
       <button class="pill-enable mono" id="pill-alt" type="button">Use your own model…</button>
       <button class="pill-enable mono" id="pill-cancel" type="button">Cancel</button>
@@ -73,7 +74,7 @@
 <style>
   .pill-wrap {
     position: fixed;
-    bottom: var(--s-3);
+    bottom: calc(var(--s-3) + env(safe-area-inset-bottom, 0px));
     left: 50%;
     transform: translateX(-50%);
     z-index: 90;
@@ -658,6 +659,9 @@
       const el = document.getElementById('pill-size');
       if (el) el.textContent = size;
     });
+    // Phones confirm with eyes open: surface the data-plan reality.
+    const wifi = document.getElementById('pill-wifi');
+    if (wifi) wifi.hidden = !/Android|iPhone|iPad|Mobi/i.test(navigator.userAgent);
     consent.hidden = false;
   });
   $('pill-cancel').addEventListener('click', () => {

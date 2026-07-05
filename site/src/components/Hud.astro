@@ -103,6 +103,19 @@
     padding: var(--s-3);
   }
 
+  /* Phones: the nav is a full-width bar up top, so the status chip and its
+     drawer drop below it instead of colliding. */
+  @media (max-width: 640px) {
+    .hud {
+      top: calc(env(safe-area-inset-top, 0px) + 2.9rem);
+    }
+
+    .hud-drawer {
+      top: calc(env(safe-area-inset-top, 0px) + 5.6rem);
+      max-height: 62vh;
+    }
+  }
+
   .hud-drawer-head {
     display: flex;
     justify-content: space-between;

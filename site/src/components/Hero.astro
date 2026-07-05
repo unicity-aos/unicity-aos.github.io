@@ -75,6 +75,41 @@
     }
   }
 
+  /* Phones: no pin at all. The hero copy is taller than the screen there,
+     and a pinned stage turns scrolling into the condense scrub instead of
+     revealing the buttons — content you can't reach. Same treatment the
+     keys section gets: static flow, everything readable, the condense is a
+     desktop luxury. Title drops a step so twelve characters fit. */
+  @media (max-width: 640px) {
+    .hero {
+      height: auto;
+      min-height: 100svh;
+    }
+
+    .hero-stage {
+      position: static;
+      height: auto;
+      overflow: visible;
+      align-items: start;
+    }
+
+    .hero-inner {
+      opacity: 1;
+      translate: none;
+      padding-block: calc(var(--s-6) + 2.5rem) var(--s-7);
+    }
+
+    /* the scroll driver still stamps is-condensed; unpinned content must
+       stay clickable regardless */
+    .hero.is-condensed .hero-inner {
+      pointer-events: auto;
+    }
+
+    .hero-title {
+      font-size: var(--step-5);
+    }
+  }
+
   /* Load-in: each line arrives a beat after the last, once, on first
      paint. Scroll owns everything after that. */
   .hero-inner > * {

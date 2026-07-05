@@ -91,6 +91,18 @@ main {
   margin-inline: auto;
 }
 
+/* Phones: the rail hugs the edge; reclaim most of its gutter and the wrap's
+   side margins — every horizontal pixel is content now. */
+@media (max-width: 640px) {
+  main {
+    padding-left: calc(var(--rail-x) + 0.25rem);
+  }
+
+  .wrap {
+    width: calc(100% - 1.5rem);
+  }
+}
+
 /* elements that clamp onto the rail (astrid-rail draws the connector) */
 .dock-chip {
   display: inline-flex;

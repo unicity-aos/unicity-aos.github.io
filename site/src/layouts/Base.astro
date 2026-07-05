@@ -96,9 +96,32 @@ const { title, description } = Astro.props;
         cursor: default;
       }
 
+      /* Phones: the floating links become a real bar — full width, blurred
+         backdrop so they survive sitting over the hero, scrollable sideways
+         instead of wrapping over content, and clear of the notch. */
       @media (max-width: 640px) {
         .site-tabs {
+          left: 0;
+          right: 0;
+          top: 0;
           gap: var(--s-2);
+          padding: calc(var(--s-1) + env(safe-area-inset-top, 0px)) var(--s-2) var(--s-1);
+          overflow-x: auto;
+          white-space: nowrap;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
+          background: color-mix(in srgb, var(--bg) 82%, transparent);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border-bottom: 1px solid var(--line);
+        }
+
+        .site-tabs::-webkit-scrollbar {
+          display: none;
+        }
+
+        .site-tabs a {
+          flex: none;
         }
       }
     </style>

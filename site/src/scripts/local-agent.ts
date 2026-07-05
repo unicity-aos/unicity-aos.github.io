@@ -27,9 +27,11 @@ export type AgentState = 'off' | 'unsupported' | 'loading' | 'ready' | 'thinking
 // record shipped a window-size conflict AND its q4f16 cut degenerates
 // into two-word repetition loops on real questions — two strikes. No-f16
 // desktops (many Android-class GPUs are desktop-shaped too) get the same
-// Llama in q4f32. Phones get SmolLM2-360M:
-// iOS Safari kills tabs long before a 1B's working set, and a small brain
-// beats a crashed tab.
+// Llama in q4f32. Phones with f16 get the same Llama q4f16: a 360M brain
+// answered like a 360M brain, and the consent gate (with a mobile-data
+// warning) makes the ~600 MB an informed choice. Phones WITHOUT f16 are
+// weak-GPU devices; they keep SmolLM2-360M, because there a small brain
+// still beats a crashed tab, and load failure falls back there anyway.
 let picked = '';
 export async function pickModel(): Promise<string> {
   if (picked) return picked;
@@ -46,7 +48,7 @@ export async function pickModel(): Promise<string> {
     /Android|iPhone|iPad|Mobi/i.test(navigator.userAgent) ||
     ((navigator as unknown as { deviceMemory?: number }).deviceMemory ?? 8) <= 4;
   picked = mobile
-    ? (f16 ? 'SmolLM2-360M-Instruct-q4f16_1-MLC' : 'SmolLM2-360M-Instruct-q4f32_1-MLC')
+    ? (f16 ? 'Llama-3.2-1B-Instruct-q4f16_1-MLC' : 'SmolLM2-360M-Instruct-q4f32_1-MLC')
     : (f16 ? 'Llama-3.2-1B-Instruct-q4f16_1-MLC' : 'Llama-3.2-1B-Instruct-q4f32_1-MLC');
   return picked;
 }
