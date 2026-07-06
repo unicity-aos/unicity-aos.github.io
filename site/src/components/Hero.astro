@@ -8,7 +8,11 @@
 <header class="hero" id="top">
   <div class="hero-stage">
     <div class="wrap hero-inner">
-    <p class="eyebrow">Astrid <span class="hero-by">by Unicity</span></p>
+    <p class="eyebrow hero-maker">
+      <a href="https://www.unicity.ai" target="_blank" rel="noopener" title="Unicity">
+        <img src="/unicity-logo.svg" alt="Unicity" width="133" height="28" />
+      </a>
+    </p>
     <h1 class="hero-title">
       Let your AI<br /><span class="gradient-text">actually do things</span>.
     </h1>
@@ -140,13 +144,22 @@
     }
   }
 
-  /* Maker's mark: quiet, riding the eyebrow, never competing with the
-     headline. Credibility, not co-billing. */
-  .hero-by {
-    color: var(--text-faint);
-    font-weight: 400;
-    text-transform: none;
-    letter-spacing: 0.02em;
+  /* Maker's mark: the Unicity logo itself — one brand carries the page.
+     Quiet, never competing with the headline. */
+  .hero-maker a {
+    display: inline-block;
+    opacity: 0.85;
+    transition: opacity var(--t-fast) var(--ease-out);
+  }
+
+  .hero-maker a:hover {
+    opacity: 1;
+  }
+
+  .hero-maker img {
+    display: block;
+    height: 1.75rem;
+    width: auto;
   }
 
   .hero-title {

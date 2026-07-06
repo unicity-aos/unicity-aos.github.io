@@ -41,7 +41,7 @@ export function setBrand(brand: 'astrid' | 'unicity'): void {
   document.dispatchEvent(new CustomEvent('brandchange', { detail: brand }));
 }
 
-/** Wire the nav toggle button; call once (the nav persists across pages). */
+/** Wire the toggle button (it lives in the HUD drawer, which persists across pages). */
 export function initBrandToggle(btn: HTMLButtonElement): void {
   const label = () => {
     btn.textContent = currentBrand() === 'unicity' ? '⇄ astrid' : '⇄ unicity';
