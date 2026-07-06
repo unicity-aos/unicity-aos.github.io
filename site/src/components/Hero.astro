@@ -10,7 +10,7 @@ import unicityMark from '../assets/unicity-wordmark.svg?raw';
   <div class="hero-stage">
     <div class="wrap hero-inner">
     <p class="eyebrow hero-maker">
-      Astrid <span class="hero-by">by</span>
+      Astrid <span class="hero-by">· a</span>
       <a
         href="https://www.unicity.ai"
         target="_blank"
@@ -18,6 +18,7 @@ import unicityMark from '../assets/unicity-wordmark.svg?raw';
         aria-label="Unicity"
         set:html={unicityMark}
       />
+      <span class="hero-by">project</span>
     </p>
     <h1 class="hero-title">
       Let your AI<br /><span class="gradient-text">actually do things</span>.
@@ -150,9 +151,9 @@ import unicityMark from '../assets/unicity-wordmark.svg?raw';
     }
   }
 
-  /* Maker's mark: "Astrid by" and then Unicity's own logo — the product
-     named, the one brand carrying it. Quiet, never competing with the
-     headline. */
+  /* Maker's mark: "Astrid · a Unicity project" — authorship, not a product
+     line. Astrid is the upstream open project; Unicity is its creator and
+     steward. Quiet, never competing with the headline. */
   .hero-maker {
     display: flex;
     align-items: center;
