@@ -190,7 +190,7 @@ const PALETTES: Record<'astrid' | 'unicity', Palette> = {
     light: [0.26, 1.15],
   },
   unicity: {
-    // sphere-glow ramp on the #020202 field: shadowed faces sink into
+    // sphere-glow ramp on the near-black field: shadowed faces sink into
     // near-black ember, lit faces burn at brand orange — light comes FROM
     // the form, never from a bright ground
     lo: [0.12, 0.04, 0.0],

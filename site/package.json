@@ -16,7 +16,6 @@
     "@fontsource-variable/space-grotesk": "^5.2.5",
     "@fontsource/anton": "^5.2.7",
     "@fontsource/geist-mono": "^5.2.8",
-    "@fontsource/geist-sans": "^5.2.5",
     "@fontsource/ibm-plex-mono": "^5.2.5",
     "@mlc-ai/web-llm": "^0.2.84",
     "@noble/curves": "^2.2.0",
