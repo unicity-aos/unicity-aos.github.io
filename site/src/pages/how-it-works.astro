@@ -1,0 +1,51 @@
+---
+import Base from '../layouts/Base.astro';
+import CapsuleRing from '../components/CapsuleRing.astro';
+import Hero from '../components/Hero.astro';
+import SceneThesis from '../components/SceneThesis.astro';
+import SceneDumbKernel from '../components/SceneDumbKernel.astro';
+import SceneCapsules from '../components/SceneCapsules.astro';
+import SceneLayers from '../components/SceneLayers.astro';
+import SceneKeys from '../components/SceneKeys.astro';
+import SceneCapability from '../components/SceneCapability.astro';
+import SceneHome from '../components/SceneHome.astro';
+import SceneGrow from '../components/SceneGrow.astro';
+import SceneAudiences from '../components/SceneAudiences.astro';
+import SceneProof from '../components/SceneProof.astro';
+import SceneAgent from '../components/SceneAgent.astro';
+import SceneBring from '../components/SceneBring.astro';
+import SceneBooks from '../components/SceneBooks.astro';
+import SceneStart from '../components/SceneStart.astro';
+---
+
+<Base
+  title="How Astrid works — the whole machine, running in your tab"
+  description="The full tour: a dumb kernel, every ability a sealed capsule, power that only narrows, an agent that grows itself. Every animated element is driven by the real Astrid kernel running in this browser."
+>
+  <main>
+    <CapsuleRing />
+    <Hero />
+    <SceneThesis />
+    <SceneDumbKernel />
+    <SceneCapsules />
+    <SceneLayers />
+    <SceneKeys />
+    <SceneCapability />
+    <SceneHome />
+    <SceneGrow />
+    <SceneAudiences />
+    <SceneProof />
+    <SceneAgent />
+    <SceneBring />
+    <SceneBooks />
+    <SceneStart />
+  </main>
+  <script>
+    import { initScenes } from '../scripts/scenes';
+    // astro:page-load fires on the initial load AND after every client-router
+    // navigation; only wire when this page's scenes are actually in the DOM.
+    document.addEventListener('astro:page-load', () => {
+      if (document.querySelector('[data-scene]')) initScenes();
+    });
+  </script>
+</Base>

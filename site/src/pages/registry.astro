@@ -43,17 +43,6 @@ const caps: Cap[] = [
 const tagSet = ['all', 'core', 'tools', 'providers', 'prompt', 'memory', 'frontends', 'dev'];
 const spotlight = caps.filter((c) => c.hot);
 const shelf = caps.filter((c) => !c.hot);
-
-const abilities = [
-  { name: 'Memory', note: 'Remembers across sessions', on: true },
-  { name: 'The web', note: 'Fetch pages, call APIs', on: true },
-  { name: 'Your files', note: 'Read/write where you allow', on: true },
-  { name: 'Run commands', note: 'Shell, behind approval', on: false },
-  { name: 'Calendar', note: 'Read your schedule', on: false },
-  { name: 'Email', note: 'Draft, never send unasked', on: false },
-  { name: 'Discord', note: 'Speak in your server', on: false },
-  { name: 'Skills', note: 'How-to knowledge packs', on: true },
-];
 ---
 
 <Base
@@ -140,45 +129,12 @@ const abilities = [
       <p class="eyebrow">And after that · the builder</p>
       <h2 class="reg-builder-title">Compose an agent like a loadout.</h2>
       <p class="prose dim reg-lede">
-        A separate thing from the shelf: pick abilities, bundle them into a
-        single signed file, or slot them straight into a running Astrid.
+        The shelf is the parts. The builder is where you snap them together:
+        pick where your agent lives, start from an archetype, mix and match the
+        capsules above, and it writes a real Distro.toml you install with one
+        command. That part is live today.
       </p>
-
-      <div class="reg-ghost" aria-hidden="true">
-        <div class="reg-grid">
-          <section class="card reg-pick">
-            <p class="mono reg-col-title">01 · Pick its abilities</p>
-            <div class="reg-chips">
-              {
-                abilities.map((a) => (
-                  <label class="reg-chip" data-on={String(a.on)}>
-                    <input type="checkbox" checked={a.on} disabled />
-                    <span class="reg-chip-name">{a.name}</span>
-                    <span class="mono reg-chip-note">{a.note}</span>
-                  </label>
-                ))
-              }
-            </div>
-          </section>
-
-          <section class="card reg-bundle">
-            <p class="mono reg-col-title">02 · Take it home</p>
-            <div class="reg-file mono">
-              <span class="reg-file-icon">▣</span>
-              <span class="reg-file-name">wanderer.distro</span>
-              <span class="reg-file-meta dim">4 capsules · signed · permissions declared</span>
-            </div>
-            <div class="reg-ctas">
-              <button class="btn btn-primary" disabled>Download the file</button>
-              <button class="btn" disabled>Slot it into your Astrid →</button>
-            </div>
-            <p class="mono reg-note dim">
-              One file, ready to install anywhere Astrid runs, or hand it
-              straight to the app and skip the download
-            </p>
-          </section>
-        </div>
-      </div>
+      <a class="btn btn-primary reg-builder-cta" href="/build/">Open the builder →</a>
     </section>
   </main>
 </Base>
@@ -392,7 +348,7 @@ const abilities = [
     font-size: 0.68rem;
   }
 
-  /* the builder: its own section, its own ghost */
+  /* the builder: its own section, now a live pointer to /build */
   .reg-builder {
     margin-top: var(--s-7);
     border-top: 1px solid var(--line);
@@ -404,102 +360,7 @@ const abilities = [
     margin-block: var(--s-2) var(--s-3);
   }
 
-  .reg-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
-    gap: var(--s-3);
-  }
-
-  @media (max-width: 900px) {
-    .reg-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .reg-pick,
-  .reg-bundle {
-    padding: var(--s-3);
-  }
-
-  .reg-col-title {
-    font-size: var(--step--1);
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: var(--text-dim);
-    margin-bottom: var(--s-3);
-  }
-
-  .reg-chips {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--s-1);
-  }
-
-  @media (max-width: 620px) {
-    .reg-chips {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .reg-chip {
-    display: grid;
-    grid-template-columns: auto auto 1fr;
-    align-items: baseline;
-    gap: 0.6em;
-    padding: 0.6em 0.9em;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-  }
-
-  .reg-chip[data-on='true'] {
-    border-color: color-mix(in srgb, var(--capsule) 45%, transparent);
-  }
-
-  .reg-chip-name {
-    font-size: var(--step--1);
-  }
-
-  .reg-chip-note {
-    font-size: 0.68rem;
-    color: var(--text-faint);
-    justify-self: end;
-    text-align: right;
-  }
-
-  .reg-file {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    column-gap: var(--s-2);
-    align-items: baseline;
-    padding: var(--s-3);
-    border: 1px dashed var(--line-bright);
-    border-radius: 10px;
-    margin-bottom: var(--s-3);
-  }
-
-  .reg-file-icon {
-    color: var(--capsule);
-    font-size: var(--step-2);
-    grid-row: span 2;
-  }
-
-  .reg-file-name {
-    font-size: var(--step-1);
-  }
-
-  .reg-file-meta {
-    font-size: 0.7rem;
-  }
-
-  .reg-ctas {
-    display: flex;
-    gap: var(--s-2);
-    flex-wrap: wrap;
-    margin-bottom: var(--s-2);
-  }
-
-  .reg-note {
-    font-size: 0.72rem;
-    line-height: 1.5;
+  .reg-builder-cta {
+    margin-top: var(--s-2);
   }
 </style>

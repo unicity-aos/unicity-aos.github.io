@@ -1,0 +1,1415 @@
+---
+/** /build — the agent builder. Mr Potato Head for agents: name it, pick where
+ *  it lives, start from an archetype, then swap real capsules in and out. The
+ *  workbench is genuinely interactive and every part is a REAL capsule that is
+ *  on GitHub today; the manifest it writes is a real Distro.toml. What is NOT
+ *  shipped, and is labelled so: one-click install from the browser into a
+ *  running daemon, slipping a custom distro through the Claude plugin, and the
+ *  name -> identity preset. Those are grayed "coming"; the copyable commands
+ *  underneath them are the real path today. Honesty rule from DESIGN.md holds:
+ *  nothing here pretends to be live if it is not. No em-dashes in copy. */
+import Base from '../layouts/Base.astro';
+---
+
+<Base
+  title="Build your agent — Astrid"
+  description="Name it, pick where it lives, start from an archetype, then swap real capsules in and out. The builder writes a real Distro.toml from capsules that are on GitHub today, and hands you one command to take it home."
+>
+  <main class="build wrap">
+    <header class="build-head">
+      <p class="eyebrow">The builder</p>
+      <h1 class="build-title">Build your agent.<br /><span class="gradient-text">Part by part.</span></h1>
+      <p class="prose dim build-lede">
+        Every ability is a sealed capsule: the brain, the memory, the tools,
+        the guards. Snap them together below, then swap any part later without
+        rebuilding the rest. Your agent can never take more than you gave it.
+      </p>
+      <p class="mono build-honesty">
+        The workbench is real: every capsule below is on
+        <a href="https://github.com/unicity-astrid">GitHub today</a>, and the
+        manifest it writes is a real <code>Distro.toml</code>. Installing it is
+        one command you copy. One-click install from this tab, and slipping a
+        custom distro through the Claude plugin, are on the way and marked so.
+      </p>
+    </header>
+
+    <!-- STEP 1 — name + platform -->
+    <section class="step">
+      <p class="step-label mono">Step 1 · name it, and pick where it lives</p>
+      <div class="step1-grid">
+        <label class="name-field">
+          <span class="mono field-cap">agent name</span>
+          <input id="agentName" value="my-agent" spellcheck="false" autocomplete="off" />
+          <span class="mono field-note" id="slugNote">the name it answers to, and its identity on the OS</span>
+        </label>
+        <div class="platforms" id="platforms"></div>
+      </div>
+      <p class="platform-note dim" id="platformNote"></p>
+    </section>
+
+    <!-- STEP 2 — archetype -->
+    <section class="step">
+      <p class="step-label mono">Step 2 · start from an archetype</p>
+      <p class="step-sub dim">
+        A starting point, not a locked bundle. Each one fills the workbench with
+        real capsules; change anything you like from there.
+      </p>
+      <div class="archetypes" id="archetypes"></div>
+    </section>
+
+    <!-- STEP 3 — the workbench -->
+    <section class="step">
+      <p class="step-label mono">Step 3 · the workbench</p>
+      <p class="step-sub dim">
+        Each slot takes a capsule. Every capsule declares its keys up front:
+        the permissions it holds, and nothing more.
+      </p>
+      <div class="bench">
+        <div class="slots" id="slots"></div>
+
+        <aside class="side">
+          <div class="card side-card fig-card">
+            <p class="mono field-cap">your agent</p>
+            <div class="fig" id="fig" aria-hidden="true"></div>
+            <p class="mono fig-name" id="figName">my-agent</p>
+            <p class="mono fig-count dim" id="figCount"></p>
+          </div>
+
+          <div class="card side-card keys-card">
+            <p class="mono field-cap">keys it will hold</p>
+            <div class="keychips" id="keychips"></div>
+            <p class="keys-note dim">
+              Keys only ever get fewer down the chain. Helpers your agent hires
+              hold at most these, never more. Passwords stay in the secret store
+              and are never handed to the model.
+            </p>
+          </div>
+
+          <div class="card side-card manifest-card">
+            <div class="manifest-head">
+              <span class="mono">Distro.toml</span>
+              <button class="mono manifest-copy" id="copyManifest" type="button">copy</button>
+            </div>
+            <pre class="manifest mono" id="manifest"></pre>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- STEP 4 — take it home -->
+    <section class="step">
+      <p class="step-label mono">Step 4 · take it home</p>
+      <div class="card install">
+        <div class="install-head">
+          <h2 id="installTitle" class="install-title"></h2>
+          <p id="installNote" class="dim install-note"></p>
+        </div>
+        <ol class="cmd-list" id="cmdList"></ol>
+        <div class="install-actions">
+          <button class="btn" id="downloadBtn" type="button">Download Distro.toml</button>
+          <button class="btn install-soon" disabled aria-disabled="true">
+            Install into your Astrid → <span class="soon-tag mono">one-click · coming</span>
+          </button>
+        </div>
+        <p class="mono install-soon-note dim" id="soonNote"></p>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast mono" id="toast" role="status" aria-live="polite">copied</div>
+</Base>
+
+<script>
+  type Opt = {
+    id: string;
+    cap: string;
+    name: string;
+    desc: string;
+    keys: string[];
+    group?: string;
+    role?: string;
+  };
+  type Slot = {
+    id: string;
+    icon: string;
+    name: string;
+    req: string;
+    hint: string;
+    multi?: boolean;
+    hideOnClaude?: boolean;
+    opts: Opt[];
+  };
+  type Platform = {
+    id: string;
+    name: string;
+    avail: boolean;
+    brainLocked?: boolean;
+    note: string;
+    install: 'claude' | 'standalone' | 'soon';
+  };
+  type Archetype = {
+    id: string;
+    icon: string;
+    name: string;
+    desc: string;
+    parts: Record<string, string | string[] | null>;
+  };
+
+  // ---- data. Every `cap` is a real capsule in unicity-astrid on GitHub. ----
+
+  const SLOTS: Slot[] = [
+    {
+      id: 'provider',
+      icon: '◆',
+      name: 'The brain',
+      req: 'required',
+      hideOnClaude: true,
+      hint: 'Which model answers. Swap the vendor tomorrow without touching the rest.',
+      opts: [
+        { id: 'openai', cap: 'openai', name: 'OpenAI', desc: 'GPT models via your OpenAI key', keys: [], group: 'llm', role: 'provider' },
+        { id: 'openai-compat', cap: 'openai-compat', name: 'OpenAI-compatible', desc: 'LM Studio, Ollama, llama.cpp, on your GPU', keys: [], group: 'llm', role: 'provider' },
+      ],
+    },
+    {
+      id: 'loop',
+      icon: '↻',
+      name: 'The loop',
+      req: 'required',
+      hint: 'How it thinks: reason, act, observe, repeat.',
+      opts: [
+        { id: 'react', cap: 'react', name: 'ReAct', desc: 'The stateless reason-and-act coordinator', keys: [], role: 'coordinator' },
+      ],
+    },
+    {
+      id: 'memory',
+      icon: '▤',
+      name: 'The memory',
+      req: 'optional',
+      multi: true,
+      hint: 'What it learned yesterday, still there today.',
+      opts: [
+        { id: 'memory', cap: 'memory', name: 'Cross-session memory', desc: 'Reads .astrid/memory.md into the prompt', keys: ['files'] },
+        { id: 'session', cap: 'session', name: 'Session store', desc: 'Persistent, append-only conversation history', keys: [] },
+      ],
+    },
+    {
+      id: 'tools',
+      icon: '⚒',
+      name: 'The toolbelt',
+      req: 'pick any',
+      multi: true,
+      hint: 'Each tool is sealed. Each one costs a key.',
+      opts: [
+        { id: 'fs', cap: 'fs', name: 'Files', desc: 'Read and write your project, behind the VFS airlock', keys: ['files'] },
+        { id: 'http', cap: 'http', name: 'Web', desc: 'Fetch and call APIs, behind the SSRF airlock', keys: ['web'] },
+        { id: 'shell', cap: 'shell', name: 'Shell', desc: 'Run commands, gated behind approval', keys: ['commands'] },
+        { id: 'system', cap: 'system', name: 'Self-manage', desc: 'Inspect and manage its own runtime', keys: [] },
+      ],
+    },
+    {
+      id: 'skills',
+      icon: '✦',
+      name: 'The skills',
+      req: 'optional',
+      multi: true,
+      hint: 'How-to knowledge any agent can pick up.',
+      opts: [
+        { id: 'skills', cap: 'skills', name: 'Skills loader', desc: 'Loads SKILL.md how-to packs from the workspace', keys: ['files'] },
+        { id: 'agents', cap: 'agents', name: 'Project rules', desc: 'Injects AGENTS.md instructions into the prompt', keys: ['files'] },
+        { id: 'forge', cap: 'forge', name: 'The forge', desc: 'Teaches the agent to build its own capsules', keys: [] },
+      ],
+    },
+    {
+      id: 'frontend',
+      icon: '⌗',
+      name: 'The frontends',
+      req: 'need one',
+      multi: true,
+      hideOnClaude: true,
+      hint: 'How you reach it. Every frontend is an uplink to the same agent.',
+      opts: [
+        { id: 'cli', cap: 'cli', name: 'Terminal', desc: 'The TUI, bridged over a Unix socket', keys: [], role: 'uplink' },
+        { id: 'telegram', cap: 'telegram', name: 'Telegram', desc: 'A Telegram bot as a frontend', keys: [], role: 'uplink' },
+      ],
+    },
+  ];
+
+  const PLATFORMS: Platform[] = [
+    {
+      id: 'claude',
+      name: 'Claude Code',
+      avail: true,
+      brainLocked: true,
+      install: 'claude',
+      note: 'Astrid slots in underneath the Claude Code you already run. Claude stays the brain and the frontend, so the provider and frontend slots drop away. You keep Claude, and gain the OS underneath it.',
+    },
+    {
+      id: 'standalone',
+      name: 'Standalone daemon',
+      avail: true,
+      brainLocked: false,
+      install: 'standalone',
+      note: 'One daemon on your machine. Every frontend (terminal, Telegram, browser) is an uplink to the same agent. Close one, open another: same agent, same memory.',
+    },
+    { id: 'codex', name: 'Codex', avail: false, install: 'soon', note: '' },
+    { id: 'hermes', name: 'Agent Hermes', avail: false, install: 'soon', note: '' },
+    { id: 'openclaw', name: 'OpenClaw', avail: false, install: 'soon', note: '' },
+  ];
+
+  const ARCHETYPES: Archetype[] = [
+    {
+      id: 'coder',
+      icon: '⌨',
+      name: 'The Coder',
+      desc: 'Ships code. Files, shell, the forge, and it remembers the project.',
+      parts: {
+        provider: 'openai-compat',
+        loop: 'react',
+        memory: ['memory', 'session'],
+        tools: ['fs', 'shell', 'http', 'system'],
+        skills: ['skills', 'agents', 'forge'],
+        frontend: ['cli'],
+      },
+    },
+    {
+      id: 'researcher',
+      icon: '🔍',
+      name: 'The Researcher',
+      desc: 'Reads everything, remembers everything, cites its sources.',
+      parts: {
+        provider: 'openai',
+        loop: 'react',
+        memory: ['memory', 'session'],
+        tools: ['http', 'fs'],
+        skills: ['skills'],
+        frontend: ['cli'],
+      },
+    },
+    {
+      id: 'concierge',
+      icon: '🎩',
+      name: 'The Concierge',
+      desc: 'Runs on your GPU, reachable from Telegram. Handles the small stuff.',
+      parts: {
+        provider: 'openai-compat',
+        loop: 'react',
+        memory: ['memory'],
+        tools: ['http'],
+        skills: [],
+        frontend: ['telegram'],
+      },
+    },
+    {
+      id: 'bare',
+      icon: '⚙',
+      name: 'Bare Metal',
+      desc: 'Just the loop and a way in. You add every capability yourself.',
+      parts: {
+        provider: 'openai-compat',
+        loop: 'react',
+        memory: [],
+        tools: [],
+        skills: [],
+        frontend: ['cli'],
+      },
+    },
+  ];
+
+  const ALL_KEYS = ['files', 'web', 'commands'];
+
+  const state: {
+    platform: string;
+    archetype: string | null;
+    name: string;
+    parts: Record<string, string | string[] | null>;
+  } = {
+    platform: 'claude',
+    archetype: 'coder',
+    name: 'my-agent',
+    parts: clone(ARCHETYPES[0].parts),
+  };
+
+  // ---- helpers ----
+
+  function clone<T>(v: T): T {
+    return JSON.parse(JSON.stringify(v));
+  }
+  function $(sel: string): HTMLElement {
+    return document.querySelector(sel) as HTMLElement;
+  }
+  function slotById(id: string): Slot {
+    return SLOTS.find((s) => s.id === id) as Slot;
+  }
+  function optById(slotId: string, optId: string): Opt | undefined {
+    return slotById(slotId).opts.find((o) => o.id === optId);
+  }
+  function onClaude(): boolean {
+    return state.platform === 'claude';
+  }
+  function slotHidden(slot: Slot): boolean {
+    return !!slot.hideOnClaude && onClaude();
+  }
+
+  // "My Agent" -> "my-agent"; "My. Agent" -> "my.agent". Dots survive as
+  // separators; whitespace around a dot collapses; other whitespace hyphenates.
+  function slugify(raw: string): string {
+    let s = raw.toLowerCase().trim();
+    s = s.replace(/\s*\.\s*/g, '.'); // collapse spaces hugging a dot
+    s = s.replace(/\s+/g, '-'); // remaining whitespace to hyphens
+    s = s.replace(/[^a-z0-9._-]/g, ''); // drop anything else
+    s = s.replace(/-{2,}/g, '-').replace(/\.{2,}/g, '.'); // no runs
+    s = s.replace(/^[-.]+|[-.]+$/g, ''); // no leading/trailing separators
+    return s || 'my-agent';
+  }
+
+  // selected capsules, in a stable slot order, honouring the platform
+  function selectedCaps(): Array<{ slot: Slot; opt: Opt }> {
+    const out: Array<{ slot: Slot; opt: Opt }> = [];
+    for (const slot of SLOTS) {
+      if (slotHidden(slot)) continue;
+      const v = state.parts[slot.id];
+      const ids = slot.multi ? ((v as string[]) || []) : v ? [v as string] : [];
+      for (const id of ids) {
+        const opt = optById(slot.id, id);
+        if (opt) out.push({ slot, opt });
+      }
+    }
+    return out;
+  }
+
+  function currentKeys(): Set<string> {
+    const keys = new Set<string>();
+    for (const { opt } of selectedCaps()) opt.keys.forEach((k) => keys.add(k));
+    return keys;
+  }
+
+  function capsuleCount(): number {
+    // the react loop plus every selected capsule; on Claude the brain is Claude
+    return selectedCaps().length;
+  }
+
+  // ---- render: platforms ----
+
+  function renderPlatforms(): void {
+    const el = $('#platforms');
+    el.innerHTML = '';
+    for (const p of PLATFORMS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className =
+        'platform' + (state.platform === p.id ? ' sel' : '') + (p.avail ? '' : ' soon');
+      b.innerHTML = p.avail
+        ? p.name
+        : `${p.name} <span class="soon-tag mono">soon</span>`;
+      if (p.avail) b.onclick = () => selectPlatform(p.id);
+      else b.disabled = true;
+      el.appendChild(b);
+    }
+    const p = PLATFORMS.find((x) => x.id === state.platform) as Platform;
+    $('#platformNote').textContent = p.note;
+  }
+
+  function selectPlatform(id: string): void {
+    state.platform = id;
+    // moving to Claude, ensure standalone-only slots don't strand a required
+    // pick; moving off Claude, make sure a provider and a frontend exist.
+    if (id !== 'claude') {
+      if (!state.parts.provider) state.parts.provider = 'openai-compat';
+      const fe = (state.parts.frontend as string[]) || [];
+      if (fe.length === 0) state.parts.frontend = ['cli'];
+    }
+    renderAll();
+  }
+
+  // ---- render: archetypes ----
+
+  function renderArchetypes(): void {
+    const el = $('#archetypes');
+    el.innerHTML = '';
+    for (const a of ARCHETYPES) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'archetype card' + (state.archetype === a.id ? ' sel' : '');
+      card.innerHTML = `
+        <span class="arch-icon">${a.icon}</span>
+        <span class="arch-name">${a.name}</span>
+        <span class="arch-desc dim">${a.desc}</span>`;
+      card.onclick = () => {
+        state.archetype = a.id;
+        state.parts = clone(a.parts);
+        renderAll();
+      };
+      el.appendChild(card);
+    }
+  }
+
+  // ---- render: slots ----
+
+  function renderSlots(): void {
+    const el = $('#slots');
+    el.innerHTML = '';
+    for (const slot of SLOTS) {
+      if (slotHidden(slot)) {
+        el.appendChild(hiddenSlotCard(slot));
+        continue;
+      }
+      el.appendChild(slotCard(slot));
+    }
+  }
+
+  function hiddenSlotCard(slot: Slot): HTMLElement {
+    const card = document.createElement('div');
+    card.className = 'slot slot-off';
+    const why =
+      slot.id === 'provider'
+        ? 'Claude is the brain. No provider capsule needed.'
+        : 'Claude is the frontend. No frontend capsule needed.';
+    card.innerHTML = `
+      <div class="slot-head">
+        <span class="slot-icon">${slot.icon}</span>
+        <h3 class="slot-name">${slot.name}</h3>
+        <span class="slot-req mono">set by Claude</span>
+      </div>
+      <p class="slot-off-note dim">${why}</p>`;
+    return card;
+  }
+
+  function slotCard(slot: Slot): HTMLElement {
+    const card = document.createElement('div');
+    const v = state.parts[slot.id];
+    const filled = slot.multi ? ((v as string[]) || []).length > 0 : !!v;
+    card.className = 'slot' + (filled ? ' filled' : '');
+    card.innerHTML = `
+      <div class="slot-head">
+        <span class="slot-icon">${slot.icon}</span>
+        <h3 class="slot-name">${slot.name}</h3>
+        <span class="slot-req mono">${slot.req}</span>
+      </div>
+      <div class="opts"></div>
+      <p class="slot-hint dim">${slot.hint}</p>`;
+    const opts = card.querySelector('.opts') as HTMLElement;
+
+    for (const o of slot.opts) {
+      const isSel = slot.multi
+        ? ((v as string[]) || []).includes(o.id)
+        : v === o.id;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'opt' + (isSel ? ' sel' : '');
+      const keyTxt = o.keys.length
+        ? `<span class="opt-key mono">key: ${o.keys.join(', ')}</span>`
+        : '';
+      b.innerHTML = `
+        <span class="opt-name">${o.name}</span>
+        <span class="opt-desc dim">${o.desc}</span>
+        ${keyTxt}`;
+      b.onclick = () => toggle(slot, o.id);
+      opts.appendChild(b);
+    }
+    return card;
+  }
+
+  function toggle(slot: Slot, optId: string): void {
+    if (slot.multi) {
+      const arr = ((state.parts[slot.id] as string[]) || []).slice();
+      const i = arr.indexOf(optId);
+      if (i >= 0) {
+        // don't let the standalone frontend slot empty out: need one uplink
+        if (slot.id === 'frontend' && arr.length === 1) {
+          flash('An agent needs at least one way in');
+          return;
+        }
+        arr.splice(i, 1);
+      } else {
+        arr.push(optId);
+      }
+      state.parts[slot.id] = arr;
+    } else {
+      const cur = state.parts[slot.id];
+      // required single-slots can switch but not clear
+      state.parts[slot.id] = cur === optId && slot.req !== 'required' ? null : optId;
+    }
+    state.archetype = null; // it's a custom build now
+    renderAll();
+  }
+
+  // ---- render: figure ----
+
+  function renderFigure(): void {
+    const fig = $('#fig');
+    const visibleSlots = SLOTS.filter((s) => !slotHidden(s));
+    const n = visibleSlots.length;
+    let html = `<div class="fig-core">${onClaude() ? 'Claude' : 'the loop'}</div>`;
+    visibleSlots.forEach((slot, i) => {
+      const v = state.parts[slot.id];
+      const count = slot.multi
+        ? ((v as string[]) || []).length
+        : v
+          ? 1
+          : 0;
+      const on = count > 0;
+      const label = slot.multi && count > 1 ? `${slot.name.replace('The ', '')} ${count}` : slot.name.replace('The ', '');
+      const angle = (360 / n) * i;
+      html += `<span class="fig-slot${on ? ' on' : ''}" style="--a:${angle}deg">
+        <span class="fig-dot">${on ? (slot.multi ? count : '●') : '+'}</span>
+        <span class="fig-label">${label}</span>
+      </span>`;
+    });
+    fig.innerHTML = html;
+
+    $('#figName').textContent = slugify(state.name);
+    const keys = [...currentKeys()];
+    $('#figCount').textContent =
+      `${capsuleCount()} capsules · ${keys.length ? keys.join(' + ') : 'no keys cut'}`;
+  }
+
+  // ---- render: keys ----
+
+  function renderKeys(): void {
+    const el = $('#keychips');
+    const held = currentKeys();
+    el.innerHTML = '';
+    for (const k of ALL_KEYS) {
+      const c = document.createElement('span');
+      c.className = 'keychip mono' + (held.has(k) ? ' on' : '');
+      c.textContent = (held.has(k) ? '✓ ' : '· ') + k;
+      el.appendChild(c);
+    }
+    const never = document.createElement('span');
+    never.className = 'keychip mono never';
+    never.textContent = 'passwords';
+    never.title = 'No copy of this key exists outside your hand.';
+    el.appendChild(never);
+  }
+
+  // ---- render: manifest (a real Distro.toml) ----
+
+  function manifestText(): string {
+    const name = slugify(state.name);
+    const caps = selectedCaps();
+    const lines: string[] = [];
+    lines.push(`# assembled at astridos.org — a starting point, edit freely`);
+    lines.push(`schema-version = 1`);
+    lines.push(``);
+    lines.push(`[distro]`);
+    lines.push(`name = "${name}"`);
+    lines.push(`description = "Assembled with the Astrid builder"`);
+    if (onClaude()) {
+      lines.push(`# platform: Claude Code. Claude is the brain and the frontend.`);
+    }
+    lines.push(``);
+    for (const { opt } of caps) {
+      lines.push(`[[capsule]]`);
+      lines.push(`name = "${opt.cap}"`);
+      lines.push(`source = "unicity/${opt.cap}"`);
+      if (opt.group) lines.push(`group = "${opt.group}"`);
+      if (opt.role) lines.push(`role = "${opt.role}"`);
+      lines.push(``);
+    }
+    return lines.join('\n').replace(/\n+$/, '\n');
+  }
+
+  function highlightToml(src: string): string {
+    return src
+      .split('\n')
+      .map((line) => {
+        const esc = line
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        if (esc.trimStart().startsWith('#'))
+          return `<span class="t-c">${esc}</span>`;
+        if (/^\[.*\]$/.test(esc.trim()))
+          return `<span class="t-k">${esc}</span>`;
+        return esc.replace(/"([^"]*)"/g, '<span class="t-s">"$1"</span>');
+      })
+      .join('\n');
+  }
+
+  function renderManifest(): void {
+    $('#manifest').innerHTML = highlightToml(manifestText());
+  }
+
+  // ---- render: install ----
+
+  function renderInstall(): void {
+    const name = slugify(state.name);
+    const list = $('#cmdList');
+    const p = PLATFORMS.find((x) => x.id === state.platform) as Platform;
+    list.innerHTML = '';
+
+    let title = '';
+    let note = '';
+    let cmds: Array<{ cmd: string; note: string }> = [];
+
+    if (p.install === 'claude') {
+      title = 'Add Astrid under your Claude Code';
+      note =
+        'The plugin installs Astrid beneath Claude, then you add your chosen capsules. Claude stays the brain.';
+      cmds = [
+        {
+          cmd: 'claude plugin marketplace add unicity-astrid/sage',
+          note: 'adds the Astrid marketplace to your Claude Code',
+        },
+        {
+          cmd: 'claude plugin install astrid@astrid',
+          note: 'your Claude keeps being Claude, and gains the OS underneath',
+        },
+        {
+          cmd: capsuleInstallLine(),
+          note: 'install the capsules you picked (shared across every principal)',
+        },
+      ];
+    } else {
+      title = 'Run it as its own daemon';
+      note =
+        'Save the Distro.toml, then point astrid init at it. It installs every capsule, prompts for any keys, and writes a per-agent lockfile.';
+      cmds = [
+        {
+          cmd: 'brew install unicity-astrid/tap/astrid',
+          note: 'macOS and Linux · one daemon, every ability a capsule',
+        },
+        {
+          cmd: `astrid init --distro ./${name}.toml`,
+          note: `assembles ${name} from the manifest above`,
+        },
+        {
+          cmd: `astrid distro apply -a ${name}`,
+          note: 'target a specific agent context (its distro lockfile is per-principal)',
+        },
+      ];
+    }
+
+    $('#installTitle').textContent = title;
+    $('#installNote').textContent = note;
+
+    for (const c of cmds) {
+      const li = document.createElement('li');
+      li.className = 'cmd-row';
+      li.innerHTML = `
+        <code class="cmd mono">${escapeHtml(c.cmd)}</code>
+        <button class="cmd-copy mono" type="button" data-cmd="${escapeAttr(c.cmd)}">copy</button>
+        <span class="cmd-note dim">${c.note}</span>`;
+      (li.querySelector('.cmd-copy') as HTMLButtonElement).onclick = (e) => {
+        copy((e.currentTarget as HTMLElement).dataset.cmd || '');
+      };
+      list.appendChild(li);
+    }
+
+    $('#soonNote').textContent =
+      p.install === 'claude'
+        ? 'Coming: bundling exactly this loadout into the plugin install, and applying it in one click. For now the three commands above are the honest path.'
+        : 'Coming: one-click install straight from this tab into your running Astrid, and presetting the agent identity from the name above. For now the commands above are the honest path.';
+  }
+
+  function capsuleInstallLine(): string {
+    const caps = selectedCaps().map(({ opt }) => opt.cap);
+    if (!caps.length) return 'astrid capsule install react';
+    return 'astrid capsule install ' + caps.join(' ');
+  }
+
+  function escapeHtml(s: string): string {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+  function escapeAttr(s: string): string {
+    return escapeHtml(s).replace(/"/g, '&quot;');
+  }
+
+  // ---- clipboard + toast ----
+
+  function copy(text: string): void {
+    void navigator.clipboard?.writeText(text).then(() => flash('copied'));
+  }
+  let toastTimer = 0;
+  function flash(msg: string): void {
+    const t = $('#toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => t.classList.remove('show'), 1300);
+  }
+
+  // ---- download the real Distro.toml ----
+
+  function downloadManifest(): void {
+    const blob = new Blob([manifestText()], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'Distro.toml';
+    a.click();
+    URL.revokeObjectURL(url);
+    flash('Distro.toml saved');
+  }
+
+  // ---- master render ----
+
+  function renderAll(): void {
+    renderPlatforms();
+    renderArchetypes();
+    renderSlots();
+    renderFigure();
+    renderKeys();
+    renderManifest();
+    renderInstall();
+  }
+
+  // ---- wire once per page-load ----
+
+  function wire(): void {
+    if (!document.querySelector('.build')) return;
+
+    const nameInput = document.getElementById('agentName') as HTMLInputElement | null;
+    if (nameInput) {
+      nameInput.value = state.name;
+      nameInput.addEventListener('input', () => {
+        state.name = nameInput.value;
+        const slug = slugify(state.name);
+        $('#slugNote').textContent =
+          slug === state.name.trim()
+            ? 'the name it answers to, and its identity on the OS'
+            : `installs as "${slug}"`;
+        renderFigure();
+        renderManifest();
+        renderInstall();
+      });
+    }
+
+    (document.getElementById('copyManifest') as HTMLButtonElement).onclick = () =>
+      copy(manifestText());
+    (document.getElementById('downloadBtn') as HTMLButtonElement).onclick =
+      downloadManifest;
+
+    renderAll();
+  }
+
+  document.addEventListener('astro:page-load', wire);
+</script>
+
+<style>
+  .build {
+    padding-block: var(--s-7) var(--s-8);
+    max-width: 76rem;
+  }
+
+  .build-head {
+    margin-bottom: var(--s-6);
+  }
+
+  .build-title {
+    font-size: var(--step-5);
+    line-height: 1.02;
+    margin-block: var(--s-2) var(--s-3);
+  }
+
+  .build-lede {
+    font-size: var(--step-1);
+    margin-bottom: var(--s-3);
+  }
+
+  .build-honesty {
+    display: block;
+    font-size: var(--step--1);
+    line-height: 1.7;
+    color: var(--audit);
+    border: 1px dashed color-mix(in srgb, var(--audit) 45%, transparent);
+    border-radius: 8px;
+    padding: 0.7em 1em;
+    max-width: 64ch;
+  }
+
+  .build-honesty code {
+    color: var(--bus);
+  }
+
+  /* steps */
+  .step {
+    margin-top: var(--s-6);
+  }
+
+  .step-label {
+    font-size: var(--step--1);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--capsule);
+    margin-bottom: var(--s-2);
+  }
+
+  .step-sub {
+    font-size: var(--step-0);
+    max-width: 60ch;
+    margin-bottom: var(--s-3);
+  }
+
+  /* step 1 */
+  .step1-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+    gap: var(--s-3);
+    align-items: start;
+  }
+
+  @media (max-width: 780px) {
+    .step1-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .field-cap {
+    display: block;
+    font-size: 0.7rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    margin-bottom: var(--s-1);
+  }
+
+  .name-field input {
+    width: 100%;
+    background: var(--bg-raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: var(--step-1);
+    padding: 0.6em 0.8em;
+  }
+
+  .name-field input:focus {
+    outline: none;
+    border-color: var(--bus);
+  }
+
+  .field-note {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--text-faint);
+    margin-top: var(--s-1);
+  }
+
+  .platforms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2);
+  }
+
+  .platform {
+    border: 1px solid var(--line);
+    background: var(--bg-raised);
+    border-radius: var(--radius);
+    padding: 0.7em 1.1em;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: var(--step-0);
+    cursor: pointer;
+    transition:
+      border-color var(--t-fast) var(--ease-out),
+      background var(--t-fast) var(--ease-out);
+  }
+
+  .platform:hover {
+    border-color: var(--line-bright);
+  }
+
+  .platform.sel {
+    border-color: var(--bus);
+    background: color-mix(in srgb, var(--bus) 10%, var(--bg-raised));
+  }
+
+  .platform.soon {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .soon-tag {
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0.1em 0.4em;
+    margin-left: 0.4em;
+  }
+
+  .platform-note {
+    font-size: var(--step--1);
+    line-height: 1.6;
+    max-width: 64ch;
+    margin-top: var(--s-2);
+    border-left: 2px solid color-mix(in srgb, var(--bus) 40%, transparent);
+    padding-left: 0.9em;
+  }
+
+  /* archetypes */
+  .archetypes {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--s-2);
+  }
+
+  @media (max-width: 860px) {
+    .archetypes {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 460px) {
+    .archetypes {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .archetype {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35em;
+    padding: var(--s-3);
+    text-align: left;
+    cursor: pointer;
+    color: var(--text);
+  }
+
+  .archetype:hover {
+    border-color: var(--line-bright);
+  }
+
+  .archetype.sel {
+    border-color: var(--capsule);
+    background: var(--capsule-dim);
+  }
+
+  .arch-icon {
+    font-size: 1.4rem;
+  }
+
+  .arch-name {
+    font-size: var(--step-0);
+    font-weight: 600;
+  }
+
+  .arch-desc {
+    font-size: 0.76rem;
+    line-height: 1.45;
+  }
+
+  /* the workbench */
+  .bench {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 21rem);
+    gap: var(--s-3);
+    align-items: start;
+  }
+
+  @media (max-width: 940px) {
+    .bench {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .slots {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+  }
+
+  .slot {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: var(--s-3);
+    background: var(--bg-raised);
+  }
+
+  .slot.filled {
+    border-color: color-mix(in srgb, var(--capsule) 30%, var(--line));
+  }
+
+  .slot-off {
+    opacity: 0.6;
+    border-style: dashed;
+  }
+
+  .slot-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6em;
+    margin-bottom: var(--s-2);
+  }
+
+  .slot-icon {
+    color: var(--capsule);
+    font-size: 1.1rem;
+  }
+
+  .slot-name {
+    font-size: var(--step-0);
+    font-weight: 600;
+  }
+
+  .slot-req {
+    margin-left: auto;
+    font-size: 0.64rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+  }
+
+  .slot-off-note {
+    font-size: var(--step--1);
+  }
+
+  .opts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-1);
+  }
+
+  .opt {
+    flex: 1 1 13rem;
+    text-align: left;
+    border: 1px solid var(--line);
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 0.65em 0.8em;
+    cursor: pointer;
+    color: var(--text);
+    transition:
+      border-color var(--t-fast) var(--ease-out),
+      background var(--t-fast) var(--ease-out);
+    display: flex;
+    flex-direction: column;
+    gap: 0.15em;
+  }
+
+  .opt:hover {
+    border-color: var(--line-bright);
+  }
+
+  .opt.sel {
+    border-color: var(--capsule);
+    background: var(--capsule-dim);
+  }
+
+  .opt-name {
+    font-size: var(--step--1);
+    font-weight: 600;
+  }
+
+  .opt.sel .opt-name::before {
+    content: '● ';
+    color: var(--capsule);
+    font-size: 0.7em;
+    vertical-align: 0.15em;
+  }
+
+  .opt-desc {
+    font-size: 0.72rem;
+    line-height: 1.4;
+  }
+
+  .opt-key {
+    font-size: 0.64rem;
+    color: var(--deny);
+  }
+
+  .slot-hint {
+    font-size: 0.72rem;
+    margin-top: var(--s-2);
+  }
+
+  /* the side column */
+  .side {
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    position: sticky;
+    top: var(--s-5);
+  }
+
+  @media (max-width: 940px) {
+    .side {
+      position: static;
+    }
+  }
+
+  .side-card {
+    padding: var(--s-3);
+  }
+
+  /* figure */
+  .fig {
+    position: relative;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    margin: var(--s-2) 0;
+    min-height: 220px;
+  }
+
+  .fig-core {
+    width: 34%;
+    aspect-ratio: 1;
+    display: grid;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--kernel) 45%, var(--line));
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: 0.66rem;
+    text-align: center;
+  }
+
+  .fig-slot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    display: grid;
+    place-items: center;
+    transform: rotate(var(--a)) translateY(-95px) rotate(calc(-1 * var(--a)));
+  }
+
+  .fig-dot {
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 1px dashed var(--line-bright);
+    background: var(--bg);
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+  }
+
+  .fig-slot.on .fig-dot {
+    border-style: solid;
+    border-color: color-mix(in srgb, var(--capsule) 60%, transparent);
+    background: var(--capsule-dim);
+    color: var(--capsule);
+  }
+
+  .fig-label {
+    font-family: var(--font-mono);
+    font-size: 0.56rem;
+    color: var(--text-faint);
+    margin-top: 0.25em;
+    white-space: nowrap;
+  }
+
+  .fig-slot.on .fig-label {
+    color: var(--text-dim);
+  }
+
+  .fig-name {
+    text-align: center;
+    font-size: var(--step-0);
+    color: var(--text);
+  }
+
+  .fig-count {
+    text-align: center;
+    font-size: 0.68rem;
+    margin-top: 0.2em;
+  }
+
+  /* keys */
+  .keychips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4em;
+    margin: var(--s-1) 0 var(--s-2);
+  }
+
+  .keychip {
+    font-size: 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 0.25em 0.6em;
+    color: var(--text-faint);
+  }
+
+  .keychip.on {
+    border-color: color-mix(in srgb, var(--deny) 45%, transparent);
+    color: var(--deny);
+  }
+
+  .keychip.never {
+    border-color: color-mix(in srgb, var(--text-faint) 40%, transparent);
+    color: var(--text-faint);
+    text-decoration: line-through;
+  }
+
+  .keys-note {
+    font-size: 0.7rem;
+    line-height: 1.5;
+  }
+
+  /* manifest */
+  .manifest-card {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .manifest-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.7em 0.9em;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.72rem;
+    color: var(--text-dim);
+  }
+
+  .manifest-copy {
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    color: var(--text-dim);
+    font-size: 0.64rem;
+    padding: 0.2em 0.7em;
+    cursor: pointer;
+  }
+
+  .manifest-copy:hover {
+    border-color: var(--bus);
+    color: var(--bus);
+  }
+
+  .manifest {
+    margin: 0;
+    padding: 0.9em;
+    font-size: 0.68rem;
+    line-height: 1.55;
+    color: var(--text-dim);
+    overflow-x: auto;
+    max-height: 22rem;
+  }
+
+  .manifest .t-k {
+    color: var(--capsule);
+  }
+  .manifest .t-s {
+    color: var(--bus);
+  }
+  .manifest .t-c {
+    color: var(--text-faint);
+  }
+
+  /* install */
+  .install {
+    padding: var(--s-4);
+  }
+
+  .install-title {
+    font-size: var(--step-2);
+    margin-bottom: var(--s-1);
+  }
+
+  .install-note {
+    font-size: var(--step--1);
+    line-height: 1.6;
+    max-width: 64ch;
+    margin-bottom: var(--s-3);
+  }
+
+  .cmd-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-2);
+    margin-bottom: var(--s-3);
+  }
+
+  .cmd-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'cmd copy'
+      'note note';
+    gap: 0.4em 0.6em;
+    align-items: center;
+  }
+
+  .cmd {
+    grid-area: cmd;
+    display: block;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 0.7em 0.9em;
+    font-size: 0.8rem;
+    color: var(--bus);
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .cmd-copy {
+    grid-area: copy;
+    background: none;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    color: var(--text-dim);
+    font-size: 0.66rem;
+    padding: 0.35em 0.7em;
+    cursor: pointer;
+  }
+
+  .cmd-copy:hover {
+    border-color: var(--bus);
+    color: var(--bus);
+  }
+
+  .cmd-note {
+    grid-area: note;
+    font-size: 0.72rem;
+  }
+
+  .install-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2);
+    align-items: center;
+  }
+
+  .install-soon {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .install-soon:hover {
+    border-color: var(--line-bright);
+    transform: none;
+  }
+
+  .install-soon-note {
+    font-size: 0.72rem;
+    line-height: 1.55;
+    margin-top: var(--s-2);
+    max-width: 64ch;
+  }
+
+  /* toast */
+  .toast {
+    position: fixed;
+    bottom: var(--s-3);
+    left: 50%;
+    transform: translateX(-50%) translateY(1rem);
+    background: var(--bus);
+    color: #05060a;
+    font-size: 0.78rem;
+    padding: 0.5em 1em;
+    border-radius: 6px;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      opacity var(--t-fast) var(--ease-out),
+      transform var(--t-fast) var(--ease-out);
+    z-index: 200;
+  }
+
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+</style>
