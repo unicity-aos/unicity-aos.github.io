@@ -166,10 +166,9 @@ void main() {
   outColor = vec4(uTint, g * g * 0.085 * uAlpha);
 }`;
 
-// The eye's plumage, per brand. Astrid: violet-grey planks, teal/violet
-// accents, cool grain. Unicity: the AgentSphere motif — a dark environment
-// with orange as the light source; planks ramp from ember to full orange,
-// warm grain.
+// The eye's plumage: the AgentSphere motif — a dark environment with orange
+// as the light source. Planks ramp from near-black ember to full brand
+// orange; light comes FROM the form, never from a bright ground. Warm grain.
 interface Palette {
   lo: [number, number, number];
   hi: [number, number, number];
@@ -179,32 +178,18 @@ interface Palette {
   light: [number, number];
 }
 
-const PALETTES: Record<'astrid' | 'unicity', Palette> = {
-  astrid: {
-    lo: [0.10, 0.11, 0.17],
-    hi: [0.30, 0.31, 0.47],
-    a: [0.30, 0.55, 0.52],
-    b: [0.55, 0.44, 0.82],
-    grain: [0.62, 0.64, 0.78],
-    // wide range: shadowed faces sink toward the dark bg, lit faces glow
-    light: [0.26, 1.15],
-  },
-  unicity: {
-    // sphere-glow ramp on the near-black field: shadowed faces sink into
-    // near-black ember, lit faces burn at brand orange — light comes FROM
-    // the form, never from a bright ground
-    lo: [0.12, 0.04, 0.0],
-    hi: [1.0, 0.435, 0.0],
-    a: [1.0, 0.77, 0.6],
-    b: [0.58, 0.18, 0.0],
-    grain: [1.0, 0.6, 0.3],
-    // wide range, same as astrid: the dark field earns real chiaroscuro
-    light: [0.24, 1.2],
-  },
+const PALETTE: Palette = {
+  lo: [0.12, 0.04, 0.0],
+  hi: [1.0, 0.435, 0.0],
+  a: [1.0, 0.77, 0.6],
+  b: [0.58, 0.18, 0.0],
+  grain: [1.0, 0.6, 0.3],
+  // wide range: the dark field earns real chiaroscuro
+  light: [0.24, 1.2],
 };
 
 function currentPalette(): Palette {
-  return PALETTES[document.documentElement.dataset.brand === 'unicity' ? 'unicity' : 'astrid'];
+  return PALETTE;
 }
 
 const rand = (i: number, salt: number): number => {

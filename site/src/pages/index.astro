@@ -1,12 +1,11 @@
 ---
-/** Home. The front door leads with what Astrid IS, in the first viewport,
- *  with no scroll required: a modular operating system for AI agents. The
- *  old cinematic (the 01 -> 10 story) now lives at /how-it-works; the home's
- *  job is to land the claim and hand the visitor two doors: build one, or
- *  watch the machine run. The live-kernel proof stays: the claim badge below
- *  is wired to the real in-tab kernel, same as everywhere else on the site. */
+/** Home. The eye and the hero live here, on the front door: the tall hero
+ *  condenses the real-kernel eye into the rail as you scroll, then the page
+ *  explains the shape of the OS and points you at the builder. The 01 -> 10
+ *  cinematic moved to /how-it-works; the eye did NOT go with it. */
 import Base from '../layouts/Base.astro';
-import unicityMark from '../assets/unicity-wordmark.svg?raw';
+import CapsuleRing from '../components/CapsuleRing.astro';
+import Hero from '../components/Hero.astro';
 
 const shape = [
   {
@@ -39,51 +38,8 @@ const shape = [
   description="Every ability is a sealed capsule: the model, the memory, the tools, the guards. Snap them together into an agent, swap any part later, and it can never take more than you gave. Astrid runs underneath the agent you already use. This page runs the real kernel in your tab."
 >
   <main>
-    <header class="home-hero" id="top">
-      <div class="wrap home-hero-inner">
-        <p class="eyebrow home-maker">
-          Astrid <span class="home-by">· a</span>
-          <a
-            href="https://www.unicity.ai"
-            target="_blank"
-            rel="noopener"
-            aria-label="Unicity"
-            set:html={unicityMark}
-          />
-          <span class="home-by">project</span>
-        </p>
-
-        <h1 class="home-title">
-          A modular operating system<br />
-          for <span class="gradient-text">AI agents</span>.
-        </h1>
-
-        <p class="home-sub prose">
-          Every ability is a sealed capsule. The model, the memory, the tools,
-          the guards: snap them together into an agent, swap any part later,
-          and it can never take more than you gave it. Astrid slots in
-          underneath the agent you already use.
-        </p>
-
-        <p class="home-kicker">
-          Let your AI actually do things, without handing over the keys.
-        </p>
-
-        <div class="home-ctas">
-          <a class="btn btn-primary" href="/build/">Build your agent →</a>
-          <a class="btn" href="/how-it-works/">See how it works</a>
-        </div>
-
-        <a class="home-works mono" href="/build/">
-          Works with <strong>Claude</strong> today · Codex, Hermes and OpenClaw soon
-        </a>
-
-        <p class="home-claim mono" id="home-claim" data-state="booting">
-          <span class="home-claim-dot" aria-hidden="true"></span>
-          <span id="home-claim-text">Waking the real Astrid up in this tab…</span>
-        </p>
-      </div>
-    </header>
+    <CapsuleRing />
+    <Hero />
 
     <section class="home-shape wrap" aria-label="What Astrid is">
       <div class="shape-grid">
@@ -114,21 +70,23 @@ const shape = [
           <p class="prose dim">
             Pick where it lives, start from an archetype, then mix and match
             capsules from the registry. Watch its manifest and its keys assemble
-            as you go, then take it home with one command.
+            as you go. The builder is a preview today; the capsules it is made of
+            are real and on GitHub now.
           </p>
           <div class="home-ctas">
-            <a class="btn btn-primary" href="/build/">Open the builder →</a>
-            <a class="btn" href="/playground/">Or write a capsule</a>
+            <a class="btn btn-primary" href="/build/">See the builder →</a>
+            <a class="btn" href="/registry/">Browse the registry</a>
           </div>
         </div>
         <div class="build-band-fig" aria-hidden="true">
-          <div class="fig-core">the engine</div>
-          <span class="fig-slot on" style="--i:0">brain</span>
-          <span class="fig-slot on" style="--i:1">loop</span>
-          <span class="fig-slot on" style="--i:2">memory</span>
-          <span class="fig-slot" style="--i:3">tools</span>
-          <span class="fig-slot" style="--i:4">skills</span>
-          <span class="fig-slot" style="--i:5">guards</span>
+          <div class="bb-stack">
+            <span class="bb-part">◆<em>brain</em></span>
+            <span class="bb-part">↻<em>loop</em></span>
+            <span class="bb-part">▤<em>memory</em></span>
+            <span class="bb-part add">⚒<em>tools</em></span>
+            <span class="bb-part add">✦<em>skills</em></span>
+            <span class="bb-core">the engine · dumb on purpose</span>
+          </div>
         </div>
       </div>
     </section>
@@ -163,173 +121,13 @@ const shape = [
       </a>
     </section>
   </main>
-
-  <script>
-    // Same claim wiring the tour hero uses: reflect the real kernel status
-    // onto the home badge. The module is shared, so the badge lights up the
-    // moment boot resolves, on first load and after any client-router visit.
-    import { onKernel, kernelStatus, kernel } from '../scripts/kernel';
-
-    function apply(): void {
-      const claim = document.getElementById('home-claim');
-      const text = document.getElementById('home-claim-text');
-      if (!claim || !text) return;
-      const status = kernelStatus();
-      const bridge = kernel();
-      claim.dataset.state = status;
-      if (status === 'online' && bridge) {
-        text.textContent = 'This page is running the real Astrid kernel in this tab right now';
-      } else if (status === 'offline') {
-        text.textContent = 'Astrid can’t run in this browser · showing the story without the live demo';
-      }
-    }
-    onKernel(apply);
-    document.addEventListener('astro:page-load', apply);
-  </script>
 </Base>
 
 <style>
-  /* Hero: lands the claim in the first viewport, no scroll to get the point.
-     Unlike the tour hero this one does not pin or condense; it is a plain,
-     readable statement of what Astrid is. */
-  .home-hero {
-    min-height: min(92svh, 900px);
-    display: grid;
-    align-items: center;
-    padding-block: var(--s-7) var(--s-6);
-  }
-
-  .home-hero-inner > * {
-    animation: home-rise 0.8s var(--ease-out) both;
-  }
-
-  .home-hero-inner > .home-maker { animation-delay: 0.02s; }
-  .home-hero-inner > .home-title { animation-delay: 0.1s; }
-  .home-hero-inner > .home-sub { animation-delay: 0.22s; }
-  .home-hero-inner > .home-kicker { animation-delay: 0.32s; }
-  .home-hero-inner > .home-ctas { animation-delay: 0.42s; }
-  .home-hero-inner > .home-works { animation-delay: 0.52s; }
-  .home-hero-inner > .home-claim { animation-delay: 0.62s; }
-
-  @keyframes home-rise {
-    from { opacity: 0; translate: 0 1.2rem; }
-    to { opacity: 1; translate: 0 0; }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .home-hero-inner > * { animation: none; }
-  }
-
-  /* Maker's mark: "Astrid · a Unicity project". Authorship, quiet. */
-  .home-maker {
-    display: flex;
-    align-items: center;
-    gap: 0.6em;
-    margin-bottom: var(--s-3);
-  }
-
-  .home-by {
-    color: var(--text-faint);
-    font-weight: 400;
-    text-transform: none;
-    letter-spacing: 0.02em;
-  }
-
-  .home-maker a {
-    display: inline-flex;
-    color: var(--text);
-    opacity: 0.85;
-    transition: opacity var(--t-fast) var(--ease-out);
-  }
-
-  .home-maker a:hover { opacity: 1; }
-
-  .home-maker a :global(svg) {
-    display: block;
-    height: 0.8em;
-    width: auto;
-  }
-
-  .home-title {
-    font-size: var(--step-6);
-    font-weight: 700;
-    line-height: 1.02;
-    max-width: 18ch;
-    margin-bottom: var(--s-3);
-  }
-
-  .home-sub {
-    font-size: var(--step-1);
-    color: var(--text-dim);
-    margin-bottom: var(--s-2);
-  }
-
-  .home-kicker {
-    font-size: var(--step-0);
-    color: var(--text);
-    max-width: var(--prose-w);
-    margin-bottom: var(--s-4);
-  }
-
-  .home-ctas {
-    display: flex;
-    gap: var(--s-2);
-    flex-wrap: wrap;
-    margin-bottom: var(--s-3);
-  }
-
-  .home-works {
-    display: block;
-    width: fit-content;
-    font-size: var(--step--1);
-    color: var(--text-faint);
-    text-decoration: none;
-    margin-bottom: var(--s-4);
-    transition: color var(--t-fast) var(--ease-out);
-  }
-
-  .home-works strong {
-    color: var(--text-dim);
-    font-weight: 600;
-  }
-
-  .home-works:hover { color: var(--text-dim); }
-  .home-works:hover strong { color: var(--text); }
-
-  .home-claim {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6em;
-    padding: 0.5em 1em;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    font-size: var(--step--1);
-    color: var(--text-faint);
-    background: var(--bg-raised);
-  }
-
-  .home-claim-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--text-faint);
-    flex: none;
-  }
-
-  .home-claim[data-state='online'] {
-    color: var(--text-dim);
-    border-color: color-mix(in srgb, var(--bus) 35%, transparent);
-  }
-
-  .home-claim[data-state='online'] .home-claim-dot {
-    background: var(--bus);
-    box-shadow: 0 0 8px var(--bus);
-  }
-
   /* The shape strip: three cards that give the OS substance without the full
      cinematic. Each tone borrows one accent from the machine palette. */
   .home-shape {
-    padding-block: var(--s-5);
+    padding-block: var(--s-6) var(--s-5);
   }
 
   .shape-grid {
@@ -386,6 +184,12 @@ const shape = [
     padding-block: var(--s-4);
   }
 
+  .home-ctas {
+    display: flex;
+    gap: var(--s-2);
+    flex-wrap: wrap;
+  }
+
   .build-band {
     display: grid;
     grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
@@ -412,53 +216,63 @@ const shape = [
 
   .build-band-copy .prose { margin-bottom: var(--s-3); }
 
-  /* A small assembled-figure diagram: a core with six slots ringed around it,
-     three lit. Pure decoration, echoes the workbench on /build. */
+  /* The assembled agent as a clean stack of parts sitting on the engine.
+     Solid parts are installed; dashed ones are there to add. Pure decoration,
+     echoes the workbench on /build. */
   .build-band-fig {
-    position: relative;
-    aspect-ratio: 1;
     display: grid;
     place-items: center;
-    min-height: 240px;
+    padding: var(--s-2);
   }
 
-  .fig-core {
-    width: 40%;
-    aspect-ratio: 1;
-    display: grid;
-    place-items: center;
-    border: 1px solid color-mix(in srgb, var(--kernel) 40%, var(--line));
-    border-radius: var(--radius);
-    color: var(--text-faint);
-    font-family: var(--font-mono);
-    font-size: 0.7rem;
-    text-align: center;
-    background: var(--surface);
+  .bb-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4em;
+    width: 100%;
+    max-width: 16rem;
   }
 
-  .fig-slot {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform:
-      rotate(calc(var(--i) * 60deg))
-      translateY(-120px)
-      rotate(calc(var(--i) * -60deg));
-    padding: 0.3em 0.7em;
-    border: 1px dashed var(--line-bright);
-    border-radius: 999px;
-    font-family: var(--font-mono);
-    font-size: 0.66rem;
-    color: var(--text-faint);
-    background: var(--bg);
-    white-space: nowrap;
-  }
-
-  .fig-slot.on {
-    border-style: solid;
-    border-color: color-mix(in srgb, var(--capsule) 55%, transparent);
+  .bb-part {
+    display: flex;
+    align-items: center;
+    gap: 0.7em;
+    padding: 0.6em 0.9em;
+    border: 1px solid color-mix(in srgb, var(--capsule) 40%, var(--line));
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--capsule) 10%, var(--bg));
     color: var(--capsule);
-    background: var(--capsule-dim);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+  }
+
+  .bb-part em {
+    font-style: normal;
+    color: var(--text-dim);
+    letter-spacing: 0.02em;
+  }
+
+  .bb-part.add {
+    border-style: dashed;
+    border-color: var(--line-bright);
+    background: none;
+    color: var(--text-faint);
+  }
+
+  .bb-part.add em {
+    color: var(--text-faint);
+  }
+
+  .bb-core {
+    margin-top: 0.3em;
+    padding: 0.7em 0.9em;
+    border: 1px solid color-mix(in srgb, var(--kernel) 45%, var(--line));
+    border-radius: 10px;
+    background: var(--surface);
+    color: var(--text-faint);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    text-align: center;
   }
 
   @media (max-width: 520px) {
@@ -517,9 +331,5 @@ const shape = [
     font-size: var(--step--1);
     color: var(--bus);
     margin-top: var(--s-1);
-  }
-
-  @media (max-width: 640px) {
-    .home-title { font-size: var(--step-5); }
   }
 </style>
