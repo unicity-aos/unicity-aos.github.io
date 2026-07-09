@@ -13,7 +13,7 @@ export const GET: APIRoute = async ({ site }) => {
   const bySlug = new Map(entries.map((e) => [e.id, e.body ?? '']));
 
   const parts: string[] = [
-    '# The Astrid Book',
+    '# The Unicity Astrid OS Book',
     '',
     `> The canonical Unicity Astrid OS documentation, concatenated. Chapter index: ${base}/llms.txt`,
     '',
