@@ -20,14 +20,14 @@ const methods = [
       {
         cmd: 'curl -fsSL https://astridos.org/install.sh | sh',
         note:
-          'Installs base Astrid. Detects Claude / Grok / Codex and wires only those oracles. Nothing forced.',
+          'Installs base Astrid from GitHub Releases (macOS/Linux). Detects Claude / Grok / Codex and wires only those oracles. Homebrew is optional fallback.',
       },
     ],
   },
   {
     id: 'brew',
     label: 'Homebrew',
-    cmds: [{ cmd: 'brew install unicity-astrid/tap/astrid', note: `CLI only · ${RELEASE} · then astrid init` }],
+    cmds: [{ cmd: 'brew install unicity-astrid/tap/astrid', note: `optional · ${RELEASE} · prefer the one-command installer (releases)` }],
   },
   {
     id: 'cargo',
