@@ -44,7 +44,49 @@ const methods = [
       },
       {
         cmd: 'claude plugin marketplace add unicity-astrid/oracles',
-        note: 'plugin marketplace (when published); until then use a local path to oracles/plugins/claude',
+        note: 'enable the astrid plugin; SessionStart doctor nudges runtime / plugin / distro updates',
+      },
+    ],
+  },
+  {
+    id: 'grok',
+    label: 'Grok Build',
+    cmds: [
+      {
+        cmd: 'curl -fsSL https://astridos.org/install.sh | sh -s -- --host grok',
+        note: 'base Astrid + Grok oracle (or re-run after install.sh detects Grok)',
+      },
+      {
+        cmd: 'grok plugin install ./plugins/grok --trust',
+        note: 'from a clone of unicity-astrid/oracles; plugin name is astrid',
+      },
+    ],
+  },
+  {
+    id: 'codex',
+    label: 'Codex',
+    cmds: [
+      {
+        cmd: 'curl -fsSL https://astridos.org/install.sh | sh -s -- --host codex',
+        note: 'base Astrid + Codex oracle (or re-run after install.sh detects Codex)',
+      },
+      {
+        cmd: 'install plugins/codex from unicity-astrid/oracles',
+        note: 'Codex marketplace (.agents/plugins); SessionStart runs astrid-doctor for update clocks',
+      },
+    ],
+  },
+  {
+    id: 'upgrade',
+    label: 'Upgrade',
+    cmds: [
+      {
+        cmd: 'curl -fsSL https://astridos.org/install.sh | sh -s -- --upgrade',
+        note: 're-apply base + detected host distros (does not auto-poll)',
+      },
+      {
+        cmd: 'astrid update -y',
+        note: 'runtime clock only — GitHub Releases → ~/.astrid/bin (or brew upgrade if Homebrew)',
       },
     ],
   },
