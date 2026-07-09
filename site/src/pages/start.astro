@@ -1,243 +1,160 @@
 ---
 import Base from '../layouts/Base.astro';
 
-/** The developer entrance, shaped like a package installation page: name,
- *  version, keywords, license, then pick-your-installer with copyable
- *  commands. Every command and version here is real and verified — the
- *  version chip tracks the published Homebrew tap, the cargo path is the
- *  crate on crates.io, and the Claude commands are the documented plugin
- *  flow. Update RELEASE on each release. */
+/** Install page — command in the hero, one paste per tab. Keep RELEASE in
+ *  sync with the published Homebrew / crates.io line when it moves. */
 
 const RELEASE = 'v0.9.2';
 
-const keywords = ['agents', 'capsules', 'wasm', 'sandbox', 'audit', 'rust'];
-
+/** One copyable shell line per method. Host tabs install base + that oracle;
+ *  plugin marketplace steps stay in the note (not a second copy button). */
 const methods = [
   {
     id: 'one',
     label: 'One command',
-    cmds: [
-      {
-        cmd: 'curl -fsSL https://astridos.org/install.sh | sh',
-        note:
-          'Installs base Astrid from GitHub Releases (macOS/Linux). Detects Claude / Grok / Codex and wires only those oracles. Homebrew is optional fallback.',
-      },
-    ],
+    cmd: 'curl -fsSL https://astridos.org/install.sh | sh',
+    note: 'Base Astrid from GitHub Releases (macOS/Linux). Detects Claude, Grok, and Codex and wires only those. Homebrew is a fallback.',
   },
   {
     id: 'brew',
     label: 'Homebrew',
-    cmds: [{ cmd: 'brew install unicity-astrid/tap/astrid', note: `optional · ${RELEASE} · prefer the one-command installer (releases)` }],
+    cmd: 'brew install unicity-astrid/tap/astrid',
+    note: `Optional · ${RELEASE}. Prefer One command (releases → ~/.astrid/bin).`,
   },
   {
     id: 'cargo',
     label: 'Cargo',
-    cmds: [{ cmd: 'cargo install astrid', note: 'builds from source via crates.io' }],
+    cmd: 'cargo install astrid',
+    note: 'Build from source via crates.io.',
   },
   {
     id: 'claude',
     label: 'Claude Code',
-    cmds: [
-      {
-        cmd: 'curl -fsSL https://astridos.org/install.sh | sh -s -- --host claude',
-        note: 'base Astrid + Claude oracle (or re-run after install.sh detects Claude)',
-      },
-      {
-        cmd: 'claude plugin marketplace add unicity-astrid/oracles',
-        note: 'enable the astrid plugin; SessionStart doctor nudges runtime / plugin / distro updates',
-      },
-    ],
+    cmd: 'curl -fsSL https://astridos.org/install.sh | sh -s -- --host claude',
+    note: 'Base + Claude oracle. Then: claude plugin marketplace add unicity-astrid/oracles → enable astrid.',
   },
   {
     id: 'grok',
     label: 'Grok Build',
-    cmds: [
-      {
-        cmd: 'curl -fsSL https://astridos.org/install.sh | sh -s -- --host grok',
-        note: 'base Astrid + Grok oracle (or re-run after install.sh detects Grok)',
-      },
-      {
-        cmd: 'grok plugin install ./plugins/grok --trust',
-        note: 'from a clone of unicity-astrid/oracles; plugin name is astrid',
-      },
-    ],
+    cmd: 'curl -fsSL https://astridos.org/install.sh | sh -s -- --host grok',
+    note: 'Base + Grok oracle. Plugin: grok plugin install <clone>/plugins/grok --trust (name: astrid).',
   },
   {
     id: 'codex',
     label: 'Codex',
-    cmds: [
-      {
-        cmd: 'curl -fsSL https://astridos.org/install.sh | sh -s -- --host codex',
-        note: 'base Astrid + Codex oracle (or re-run after install.sh detects Codex)',
-      },
-      {
-        cmd: 'install plugins/codex from unicity-astrid/oracles',
-        note: 'Codex marketplace (.agents/plugins); SessionStart runs astrid-doctor for update clocks',
-      },
-    ],
+    cmd: 'curl -fsSL https://astridos.org/install.sh | sh -s -- --host codex',
+    note: 'Base + Codex oracle. Plugin from unicity-astrid/oracles plugins/codex (name: astrid).',
   },
   {
     id: 'upgrade',
     label: 'Upgrade',
-    cmds: [
-      {
-        cmd: 'curl -fsSL https://astridos.org/install.sh | sh -s -- --upgrade',
-        note: 're-apply base + detected host distros (does not auto-poll)',
-      },
-      {
-        cmd: 'astrid update -y',
-        note: 'runtime clock only — GitHub Releases → ~/.astrid/bin (or brew upgrade if Homebrew)',
-      },
-    ],
+    cmd: 'curl -fsSL https://astridos.org/install.sh | sh -s -- --upgrade',
+    note: 'Re-apply base + detected host distros. Runtime-only: astrid update -y (or brew upgrade astrid).',
   },
-];
+] as const;
 
-const useIt = [
-  { cmd: 'astrid init', note: 'pick a distro and a provider; keys go to the secret store, never flags' },
-  { cmd: 'astrid update -y', note: 'pull latest CLI/daemon from GitHub Releases (or brew upgrade if you used Homebrew)' },
-  { cmd: 'astrid doctor', note: 'plain pass/fail: daemon up, capsules ready, provider reachable' },
-  { cmd: 'astrid chat', note: 'talk to an agent that can actually do things' },
-];
-
-const buildIt = [
-  { cmd: 'astrid capsule new my-tool', note: 'scaffolds a complete capsule that compiles first try' },
-  { cmd: 'astrid capsule build', note: 'cargo compile → component wrap → signed .capsule' },
-  { cmd: 'astrid capsule check', note: 'static linter: advertised tools vs actual routing' },
-  { cmd: 'astrid capsule install ./my-tool', note: 'live-load it; the running OS gains the skill' },
-];
+const defaultMethod = 'one';
 ---
 
 <Base
   title="Install Astrid"
-  description="One command installs base Astrid and optional coding-host oracles. Or use Homebrew, Cargo, or Claude Code."
+  description="One command installs base Astrid and optional coding-host oracles."
 >
   <main class="start wrap">
-    <header class="start-head">
+    <header class="start-hero">
       <p class="eyebrow">Install</p>
       <div class="start-name-row">
-        <h1>astrid</h1>
+        <h1>Astrid</h1>
         <span class="mono start-ver">{RELEASE}</span>
       </div>
       <p class="prose dim start-lede">
-        Base Astrid is complete on its own. Oracles (Claude, Grok, Codex) light up
-        only when you already use those hosts — or when you ask. If you only want to feel it first, the
-        <a href="/playground/">playground</a> runs the real kernel in this
-        tab, nothing to install.
+        Base Astrid is complete on its own. Oracles (Claude, Grok, Codex) light
+        up only when those hosts are present — or when you ask. Prefer to feel
+        it first?
+        <a href="/playground/">Playground</a> runs the real kernel in this tab.
       </p>
-      <ul class="start-kw" role="list">
-        {keywords.map((k) => <li class="mono">{k}</li>)}
-      </ul>
-      <p class="mono start-meta dim">
-        MIT or Apache-2.0 · <a href="https://github.com/unicity-astrid/astrid">GitHub</a> ·
-        <a href="https://crates.io/crates/astrid">crates.io</a> · <a href="/book/">The book</a>
-      </p>
-    </header>
 
-    <section class="card start-install" id="install" data-method="one">
-      <span id="claude" class="start-anchor" aria-hidden="true"></span>
-      <div class="start-tabs" role="tablist" aria-label="Install method">
+      <section
+        class="card start-install"
+        id="install"
+        data-method={defaultMethod}
+        aria-label="Install command"
+      >
         {
           methods.map((m) => (
-            <button
-              class="mono start-tab"
-              role="tab"
-              data-tab={m.id}
-              aria-selected={m.id === 'one' ? 'true' : 'false'}
-            >
-              {m.label}
-            </button>
+            <span id={m.id} class="start-anchor" aria-hidden="true" />
           ))
         }
-      </div>
-      {
-        methods.map((m) => (
-          <div class="start-panel" data-panel={m.id} role="tabpanel">
-            {m.cmds.map((c) => (
-              <div class="start-cmd-row">
-                <code class="start-cmd mono">{c.cmd}</code>
-                <button class="mono start-copy" data-copy={c.cmd} aria-label={`Copy: ${c.cmd}`}>
+        <div class="start-tabs" role="tablist" aria-label="Install method">
+          {
+            methods.map((m) => (
+              <button
+                class="mono start-tab"
+                role="tab"
+                type="button"
+                id={`tab-${m.id}`}
+                data-tab={m.id}
+                aria-selected={m.id === defaultMethod ? 'true' : 'false'}
+                aria-controls={`panel-${m.id}`}
+                tabindex={m.id === defaultMethod ? 0 : -1}
+              >
+                {m.label}
+              </button>
+            ))
+          }
+        </div>
+        {
+          methods.map((m) => (
+            <div
+              class="start-panel"
+              id={`panel-${m.id}`}
+              role="tabpanel"
+              data-panel={m.id}
+              aria-labelledby={`tab-${m.id}`}
+              aria-hidden={m.id === defaultMethod ? 'false' : 'true'}
+            >
+              <div class="start-cmd-box">
+                <code class="start-cmd mono">{m.cmd}</code>
+                <button
+                  class="mono start-copy"
+                  type="button"
+                  data-copy={m.cmd}
+                  aria-label={`Copy: ${m.cmd}`}
+                >
                   copy
                 </button>
-                <p class="dim start-note">{c.note}</p>
               </div>
-            ))}
-          </div>
-        ))
-      }
-    </section>
-
-    <div class="start-grid">
-      <section class="card start-col" data-dock="use it">
-        <p class="mono start-col-title">Then · use it</p>
-        <ol class="start-steps">
-          {
-            useIt.map((s, i) => (
-              <li>
-                <span class="mono start-n">{String(i + 1).padStart(2, '0')}</span>
-                <div class="start-step-body">
-                  <div class="start-cmd-row">
-                    <code class="start-cmd mono">{s.cmd}</code>
-                    <button class="mono start-copy" data-copy={s.cmd} aria-label={`Copy: ${s.cmd}`}>
-                      copy
-                    </button>
-                  </div>
-                  <p class="dim start-note">{s.note}</p>
-                </div>
-              </li>
-            ))
-          }
-        </ol>
-        <p class="start-more dim">
-          Full walk-through, including what to look at underneath:
-          <a href="/book/getting-started/see-it-work/">Getting Started: See It Work</a>
-        </p>
+              <p class="dim start-note">{m.note}</p>
+            </div>
+          ))
+        }
       </section>
 
-      <section class="card start-col" data-dock="build on it">
-        <p class="mono start-col-title">Or · build on it</p>
-        <ol class="start-steps">
-          {
-            buildIt.map((s, i) => (
-              <li>
-                <span class="mono start-n">{String(i + 1).padStart(2, '0')}</span>
-                <div class="start-step-body">
-                  <div class="start-cmd-row">
-                    <code class="start-cmd mono">{s.cmd}</code>
-                    <button class="mono start-copy" data-copy={s.cmd} aria-label={`Copy: ${s.cmd}`}>
-                      copy
-                    </button>
-                  </div>
-                  <p class="dim start-note">{s.note}</p>
-                </div>
-              </li>
-            ))
-          }
-        </ol>
-        <p class="start-more dim">
-          The full walkthrough, snippet by snippet:
-          <a href="/book/getting-started/your-first-capsule/">Your First Capsule</a>.
-          Deeper: <a href="/book/capsule-model/designing-capsules/">Designing Capsules</a>
-          and <a href="/book/host-abi/the-syscall-surface/">the host ABI</a>.
-        </p>
-      </section>
-    </div>
+      <p class="mono start-meta dim">
+        MIT or Apache-2.0 ·
+        <a href="https://github.com/unicity-astrid/astrid">GitHub</a> ·
+        <a href="https://github.com/unicity-astrid/oracles">oracles</a> ·
+        <a href="https://crates.io/crates/astrid">crates.io</a> ·
+        <a href="/book/">The book</a>
+      </p>
+    </header>
 
     <section class="start-links">
       <a class="card start-link" href="/playground/">
         <span class="mono start-link-k">No install</span>
-        <span>Write a capsule in this tab, against the kernel running on this page</span>
+        <span>Write a capsule in this tab against the live kernel</span>
       </a>
       <a class="card start-link" href="/book/">
         <span class="mono start-link-k">The book</span>
-        <span>How the whole machine works, part by part</span>
+        <span>How the machine works, part by part</span>
       </a>
-      <a class="card start-link" href="https://github.com/unicity-astrid">
-        <span class="mono start-link-k">GitHub</span>
-        <span>The kernel, the SDK, the capsules, the RFCs. All of it.</span>
+      <a class="card start-link" href="https://github.com/unicity-astrid/oracles">
+        <span class="mono start-link-k">Oracles</span>
+        <span>Claude · Grok · Codex host adapters</span>
       </a>
       <a class="card start-link" href="/siri/">
         <span class="mono start-link-k">Hey Siri</span>
-        <span>Ask the Astrid Book by voice, on any iPhone, no app</span>
+        <span>Ask the book by voice on any iPhone</span>
       </a>
     </section>
   </main>
@@ -248,6 +165,10 @@ const buildIt = [
     padding-block: calc(var(--s-6) + 2rem) var(--s-7);
   }
 
+  .start-hero {
+    max-width: 52rem;
+  }
+
   .start-name-row {
     display: flex;
     align-items: baseline;
@@ -255,10 +176,14 @@ const buildIt = [
     margin-block: var(--s-2) var(--s-3);
   }
 
-  .start-head h1 {
-    font-family: var(--font-mono);
-    font-size: var(--step-4);
+  /* Display face (Anton) — do not override with mono; that read as "font broken". */
+  .start-hero h1 {
+    font-family: var(--font-display);
+    font-size: var(--step-5);
+    font-weight: 400;
     letter-spacing: -0.02em;
+    text-transform: uppercase;
+    line-height: 0.95;
   }
 
   .start-ver {
@@ -267,50 +192,35 @@ const buildIt = [
     border: 1px solid color-mix(in srgb, var(--capsule) 40%, transparent);
     border-radius: 999px;
     padding: 0.15em 0.7em;
+    transform: translateY(-0.15em);
   }
 
   .start-lede {
-    max-width: 60ch;
+    max-width: 48ch;
+    margin-bottom: var(--s-4);
   }
 
-  .start-kw {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--s-1);
-    list-style: none;
-    margin: var(--s-3) 0 var(--s-2);
-    padding: 0;
-  }
-
-  .start-kw li {
-    font-size: 0.72rem;
-    color: var(--text-dim);
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    padding: 0.2em 0.8em;
-  }
-
-  .start-meta {
-    font-size: var(--step--1);
-  }
-
-  /* pick your installer: one card, three tabs, commands you can copy */
   .start-install {
     position: relative;
-    margin-block: var(--s-5);
-    padding: var(--s-3);
+    margin-block: var(--s-4) var(--s-3);
+    padding: var(--s-3) var(--s-3) var(--s-4);
   }
 
   .start-anchor {
     position: absolute;
     top: -5rem;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
   }
 
   .start-tabs {
     display: flex;
-    gap: var(--s-1);
+    flex-wrap: wrap;
+    gap: 0.15rem var(--s-1);
     border-bottom: 1px solid var(--line);
     margin-bottom: var(--s-3);
+    padding-bottom: 0;
   }
 
   .start-tab {
@@ -319,9 +229,12 @@ const buildIt = [
     border-bottom: 2px solid transparent;
     color: var(--text-dim);
     font-size: var(--step--1);
-    padding: 0.5em 1em 0.7em;
+    padding: 0.55em 0.85em 0.75em;
+    margin-bottom: -1px;
     cursor: pointer;
-    transition: color var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out);
+    transition:
+      color var(--t-fast) var(--ease-out),
+      border-color var(--t-fast) var(--ease-out);
   }
 
   .start-tab:hover {
@@ -333,117 +246,84 @@ const buildIt = [
     border-bottom-color: var(--capsule);
   }
 
+  .start-tab:focus-visible {
+    outline: 1px solid var(--capsule);
+    outline-offset: 2px;
+  }
+
+  /* Panels: hidden via aria-hidden, not a partial CSS allowlist (that hid One/Grok/Codex/Upgrade). */
   .start-panel {
     display: none;
+    gap: var(--s-2);
   }
 
-  #install[data-method='brew'] [data-panel='brew'],
-  #install[data-method='cargo'] [data-panel='cargo'],
-  #install[data-method='claude'] [data-panel='claude'] {
+  .start-panel[aria-hidden='false'] {
     display: grid;
-    gap: var(--s-3);
   }
 
-  .start-cmd-row {
+  .start-cmd-box {
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
-    column-gap: var(--s-2);
-    row-gap: 0.25em;
+    align-items: center;
+    gap: var(--s-2);
+    padding: var(--s-3);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--bg) 70%, transparent);
+    border: 1px solid var(--line);
   }
 
   .start-cmd {
-    font-size: var(--step--1);
+    flex: 1 1 16rem;
+    font-size: clamp(0.78rem, 0.7rem + 0.35vw, 0.95rem);
     color: var(--bus);
     overflow-wrap: anywhere;
+    line-height: 1.45;
+    user-select: all;
   }
 
   .start-copy {
+    flex: none;
     background: none;
-    border: 1px solid var(--line);
+    border: 1px solid var(--line-bright);
     border-radius: 6px;
-    color: var(--text-faint);
-    font-size: 0.68rem;
-    padding: 0.15em 0.7em;
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding: 0.45em 0.9em;
     cursor: pointer;
     transition:
       color var(--t-fast) var(--ease-out),
-      border-color var(--t-fast) var(--ease-out);
+      border-color var(--t-fast) var(--ease-out),
+      background var(--t-fast) var(--ease-out);
   }
 
   .start-copy:hover {
     color: var(--text);
-    border-color: var(--line-bright);
+    border-color: var(--capsule);
   }
 
   .start-copy[data-done] {
     color: var(--capsule);
-    border-color: color-mix(in srgb, var(--capsule) 45%, transparent);
+    border-color: color-mix(in srgb, var(--capsule) 50%, transparent);
+    background: color-mix(in srgb, var(--capsule) 12%, transparent);
   }
 
   .start-note {
     font-size: var(--step--1);
-    flex-basis: 100%;
+    line-height: 1.55;
+    max-width: 58ch;
   }
 
-  .start-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--s-3);
-    margin-block: var(--s-5);
-  }
-
-  @media (max-width: 860px) {
-    .start-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .start-col-title {
+  .start-meta {
     font-size: var(--step--1);
-    color: var(--capsule);
-    margin-bottom: var(--s-3);
-    letter-spacing: 0.08em;
-  }
-
-  .start-steps {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: var(--s-3);
-  }
-
-  .start-steps li {
-    display: flex;
-    gap: var(--s-2);
-    align-items: baseline;
-  }
-
-  .start-step-body {
-    min-width: 0;
-  }
-
-  .start-n {
-    color: var(--text-faint);
-    font-size: var(--step--1);
-    flex: none;
-  }
-
-  .start-steps .start-note {
-    margin-top: 0.25em;
-  }
-
-  .start-more {
-    margin-top: var(--s-3);
-    font-size: var(--step--1);
-    line-height: 1.6;
   }
 
   .start-links {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
     gap: var(--s-3);
+    margin-top: var(--s-6);
   }
 
   .start-link {
@@ -468,32 +348,51 @@ const buildIt = [
 </style>
 
 <script>
-  // Tabs + copy. Wired per page-load because the client router re-creates
-  // the DOM; guards keep double-wiring out when the module survives.
+  function selectMethod(install: HTMLElement, id: string): void {
+    install.dataset.method = id;
+    for (const b of install.querySelectorAll<HTMLElement>('[data-tab]')) {
+      const on = b.dataset.tab === id;
+      b.setAttribute('aria-selected', String(on));
+      b.tabIndex = on ? 0 : -1;
+    }
+    for (const p of install.querySelectorAll<HTMLElement>('[data-panel]')) {
+      p.setAttribute('aria-hidden', String(p.dataset.panel !== id));
+    }
+  }
+
   function wire(): void {
     const install = document.getElementById('install');
     if (!install || install.dataset.wired) return;
     install.dataset.wired = '1';
 
     install.addEventListener('click', (e) => {
-      const t = (e.target as HTMLElement).closest<HTMLElement>('[data-tab], [data-copy]');
-      if (!t) return;
-      if (t.dataset.tab) {
-        install.dataset.method = t.dataset.tab;
-        for (const b of install.querySelectorAll('[data-tab]'))
-          b.setAttribute('aria-selected', String(b === t));
+      const t = (e.target as HTMLElement).closest<HTMLElement>('[data-tab]');
+      if (t?.dataset.tab) selectMethod(install, t.dataset.tab);
+    });
+
+    // Arrow keys on the tablist
+    install.querySelector('.start-tabs')?.addEventListener('keydown', (e) => {
+      const ke = e as KeyboardEvent;
+      if (ke.key !== 'ArrowRight' && ke.key !== 'ArrowLeft') return;
+      const tabs = [...install.querySelectorAll<HTMLElement>('[data-tab]')];
+      const i = tabs.findIndex((t) => t.getAttribute('aria-selected') === 'true');
+      if (i < 0) return;
+      ke.preventDefault();
+      const next = ke.key === 'ArrowRight' ? (i + 1) % tabs.length : (i - 1 + tabs.length) % tabs.length;
+      const id = tabs[next]?.dataset.tab;
+      if (id) {
+        selectMethod(install, id);
+        tabs[next]?.focus();
       }
     });
 
-    // #claude in the URL means someone followed "get it" for the Claude
-    // extension — land them on that tab, not on Homebrew.
-    if (location.hash === '#claude') {
-      install.dataset.method = 'claude';
-      for (const b of install.querySelectorAll('[data-tab]'))
-        b.setAttribute('aria-selected', String(b.getAttribute('data-tab') === 'claude'));
+    // Deep links: #claude #grok #codex #upgrade #brew #cargo #one
+    const hash = location.hash.replace(/^#/, '');
+    if (hash && install.querySelector(`[data-panel="${hash}"]`)) {
+      selectMethod(install, hash);
     }
 
-    document.querySelectorAll<HTMLButtonElement>('.start-copy').forEach((btn) => {
+    install.querySelectorAll<HTMLButtonElement>('.start-copy').forEach((btn) => {
       btn.addEventListener('click', async () => {
         try {
           await navigator.clipboard.writeText(btn.dataset.copy ?? '');
@@ -504,11 +403,12 @@ const buildIt = [
             delete btn.dataset.done;
           }, 1400);
         } catch {
-          /* clipboard denied: the command is right there to select */
+          /* command is user-selectable */
         }
       });
     });
   }
+
   wire();
   document.addEventListener('astro:page-load', wire);
 </script>
