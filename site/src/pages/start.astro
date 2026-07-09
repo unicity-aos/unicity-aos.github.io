@@ -4,7 +4,7 @@ import Base from '../layouts/Base.astro';
 /** Install page — command in the hero, one paste per tab. Keep RELEASE in
  *  sync with the published Homebrew / crates.io line when it moves. */
 
-const RELEASE = 'v0.9.2';
+const RELEASE = 'v0.9.3';
 
 /**
  * One paste each. Layout:
@@ -40,14 +40,14 @@ const methods = [
   {
     id: 'grok',
     label: 'Grok Build',
-    cmd: 'grok plugin marketplace add unicity-astrid/oracles && grok plugin install astrid@astrid-oracles',
-    note: 'Editor plugin only (name: astrid). Base runtime + distro: One command first, or re-run after Grok is installed.',
+    cmd: 'grok plugin marketplace add unicity-astrid/oracles && grok plugin install astrid@unicity-astrid/oracles --trust',
+    note: 'Editor plugin only (name: astrid · pinned by repo, not marketplace name). Base runtime + distro: One command first, or re-run after Grok is installed.',
   },
   {
     id: 'codex',
     label: 'Codex',
-    cmd: 'codex plugin marketplace add unicity-astrid/oracles && codex plugin install astrid@astrid-oracles',
-    note: 'Editor plugin only (name: astrid · .agents/plugins). Base runtime + distro: One command first.',
+    cmd: 'codex plugin marketplace add unicity-astrid/oracles && codex plugin add astrid@astrid-oracles',
+    note: 'Editor plugin only (name: astrid · .agents/plugins; codex uses `add`, not `install`). Base runtime + distro: One command first.',
   },
 ] as const;
 
