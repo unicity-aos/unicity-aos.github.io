@@ -77,7 +77,10 @@ Responses use `SessionListResponse`, `TranscriptResponse`, `SearchResponse`, and
 
 ## Event and audit feeds
 
-`GET /api/events` is the live runtime event stream. `GET /api/sys/audit` is
-paginated history. Runtime audit records are not the same product as Unicity
-Audit on the Unicity blockchain; an AOS integration between them requires an
-explicit product contract.
+| Method | Path | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/events` | SSE live runtime event stream for the authenticated principal |
+| `GET` | `/api/sys/audit` | paginated runtime audit history |
+
+Runtime audit records are not the same product as Unicity Audit on the Unicity
+blockchain; an AOS integration between them requires an explicit product contract.
