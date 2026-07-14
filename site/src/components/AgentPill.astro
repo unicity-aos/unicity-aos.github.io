@@ -97,7 +97,7 @@
     width: min(32rem, calc(100vw - 2 * var(--s-2)));
     display: grid;
     gap: 0.5rem;
-    /* Plays when the kernel unhides the pill: it arrives, not appears. */
+    /* Plays as the pill arrives on page load. */
     animation: pill-arrive 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
@@ -577,7 +577,6 @@
   onKernel((status, b) => {
     if (status !== 'online' || !b) return;
     bridge = b;
-    wrap.hidden = false;
     startNavContext(b);
     // Prior opt-in: bring the agent straight back from the weight cache.
     const optedIn = localStorage.getItem(OPTIN_KEY) === '1' || localStorage.getItem(LEGACY_OPTIN_KEY) === '1';
