@@ -15,7 +15,7 @@
  * same events: what you see is what the bus carried.
  */
 import type { AstridBridge } from './kernel';
-import type { Chapter } from './book-lens';
+import type { Chapter } from './guide-lens';
 
 export type AgentState = 'off' | 'unsupported' | 'loading' | 'ready' | 'thinking';
 
@@ -204,6 +204,7 @@ export async function removeModel(bridge: AstridBridge): Promise<void> {
     /* the engine may already be gone; cache deletion is the point */
   }
   engine = null;
+  localStorage.removeItem('aos-agent-optin');
   localStorage.removeItem('astrid-agent-optin');
   const webllm = await import('@mlc-ai/web-llm');
   // "nothing left behind" includes weights this site shipped in EARLIER
@@ -435,7 +436,7 @@ export async function completeOpenAi(
 }
 
 /**
- * Answer a question grounded in retrieved book chapters, streaming tokens.
+ * Answer a question grounded in retrieved developer-guide chapters, streaming tokens.
  * `history` carries prior turns so the conversation is genuinely a session,
  * not a series of one-shots (most recent turns only; the model is small).
  */
@@ -455,10 +456,13 @@ export async function askAgent(
     {
       role: 'system',
       content:
-        'You are the Astrid site guide, running locally in the visitor’s browser tab on the Astrid kernel’s own page. Astrid is NOT hypothetical or simulated: it is a real, shipped operating system for AI agents, and a real instance is running in this tab right now. Answer briefly (a few sentences) and only from the provided book excerpts. If the excerpts do not cover the question, say so and name the closest chapter.',
+        'You are the Unicity AOS developer guide, running locally in the visitor’s browser on Astrid Runtime. Unicity AOS is the product distribution; Astrid is the neutral operating-system runtime beneath it. Answer briefly and only from the provided developer-guide excerpts. If the excerpts do not cover the question, say so and name the closest chapter.',
     },
     ...history.slice(-6),
-    { role: 'user', content: `Book excerpts:\n\n${grounding}\n\nQuestion: ${question}` },
+    {
+      role: 'user',
+      content: `Developer Guide excerpts:\n\n${grounding}\n\nQuestion: ${question}`,
+    },
   ];
 
   let tokens = 0;

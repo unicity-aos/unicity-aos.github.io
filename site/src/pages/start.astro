@@ -1,52 +1,51 @@
 ---
 import Base from '../layouts/Base.astro';
+import { AOS_RELEASE } from '../lib/release';
 
-/** Install page — command in the hero, one paste per tab. Keep RELEASE in
- *  sync with the published Homebrew / crates.io line when it moves. */
+/** Release-status and installation page. Release metadata has one owner. */
 
-const RELEASE = 'v0.9.4';
+const RELEASE = AOS_RELEASE.version;
 
 /**
  * One paste each. Layout:
- *   One command  → shell installs *and* upgrades; detects hosts (new ones wire on re-run)
- *   Homebrew / Cargo → package-manager upgrade/install paths (not the shell)
- *   Claude / Grok / Codex → marketplace plugin install only (base via One command)
+ *   One command  → product installer, enabled only after release assets exist
+ *   Claude / Grok / Codex → marketplace adapter only (base via One command)
  */
 const methods = [
   {
     id: 'one',
     label: 'One command',
-    cmd: 'curl -fsSL https://astridos.org/install.sh | sh',
-    note: 'One command: CLI, base, then your coding hosts — it lists what it detects and asks once (Enter = wire all). Re-run to upgrade.',
+    cmd: AOS_RELEASE.installCommand,
+    requiresRelease: true,
+    note: AOS_RELEASE.available
+      ? 'Installs the AOS CLI, the pinned Astrid Runtime bundle, and Unicity CE. Re-run to upgrade.'
+      : `Staged command for ${AOS_RELEASE.version}. It becomes supported only when the matching signed AOS release is published.`,
   },
   {
-    id: 'brew',
+    id: 'homebrew',
     label: 'Homebrew',
-    cmd: 'brew upgrade unicity-astrid/tap/astrid || brew install unicity-astrid/tap/astrid',
-    note: `CLI only · ${RELEASE}. Prefer One command for releases → ~/.astrid/bin plus host plugins.`,
-  },
-  {
-    id: 'cargo',
-    label: 'Cargo',
-    cmd: 'cargo install astrid',
-    note: 'CLI only · builds latest from crates.io (re-run to upgrade). Host plugins: use One command after.',
+    cmd: 'brew install unicity-aos/tap/aos',
+    requiresRelease: true,
+    note: AOS_RELEASE.available
+      ? 'Installs the signed AOS product release and its pinned Astrid Runtime bundle.'
+      : `The tap automation is ready; the ${AOS_RELEASE.version} formula publishes when the first product release dispatch completes.`,
   },
   {
     id: 'claude',
     label: 'Claude Code',
-    cmd: 'claude plugin marketplace add unicity-astrid/oracles && claude plugin install astrid@astrid-oracles',
+    cmd: 'claude plugin marketplace add unicity-aos/oracles && claude plugin install astrid@astrid-oracles',
     note: 'Editor plugin only (name: astrid). Base runtime + distro: One command first, or re-run after Claude is installed.',
   },
   {
     id: 'grok',
     label: 'Grok Build',
-    cmd: 'grok plugin marketplace add unicity-astrid/oracles && grok plugin install astrid@unicity-astrid/oracles --trust',
+    cmd: 'grok plugin marketplace add unicity-aos/oracles && grok plugin install astrid@unicity-aos/oracles --trust',
     note: 'Editor plugin only (name: astrid · pinned by repo, not marketplace name). Base runtime + distro: One command first, or re-run after Grok is installed.',
   },
   {
     id: 'codex',
     label: 'Codex',
-    cmd: 'codex plugin marketplace add unicity-astrid/oracles && codex plugin add astrid@astrid-oracles',
+    cmd: 'codex plugin marketplace add unicity-aos/oracles && codex plugin add astrid@astrid-oracles',
     note: 'Editor plugin only (name: astrid · .agents/plugins; codex uses `add`, not `install`). Base runtime + distro: One command first.',
   },
 ] as const;
@@ -55,21 +54,22 @@ const defaultMethod = 'one';
 ---
 
 <Base
-  title="Install Unicity Astrid OS"
-  description="One command installs and upgrades Unicity Astrid OS, plus optional host plugins for Claude, Grok, and Codex."
+  title="Install Unicity AOS"
+  description={AOS_RELEASE.available
+    ? 'Install Unicity AOS and connect supported coding hosts.'
+    : `Release status for Unicity AOS ${RELEASE}; product packages are staged and not yet published.`}
 >
   <main class="start wrap">
     <header class="start-hero">
       <p class="eyebrow">Install</p>
       <div class="start-name-row">
-        <h1>Unicity Astrid OS</h1>
+        <h1>Unicity AOS</h1>
         <span class="mono start-ver">{RELEASE}</span>
       </div>
       <p class="prose dim start-lede">
-        One command installs and upgrades. Host plugins for Claude Code, Grok
-        Build, and Codex wire when those apps are on the machine — re-run after
-        you add one. Prefer to feel it first?
-        <a href="/playground/">Playground</a> runs the real kernel in this tab.
+        {AOS_RELEASE.available
+          ? 'One command installs the product CLI, pinned runtime, and Community Edition composition. Host integrations wire only with your approval.'
+          : `AOS ${RELEASE} is staged, but its signed product packages are not published yet. The command below is the release integration point, not a claim that the channel is live.`}
       </p>
 
       <section
@@ -118,8 +118,9 @@ const defaultMethod = 'one';
                   type="button"
                   data-copy={m.cmd}
                   aria-label={`Copy: ${m.cmd}`}
+                  disabled={!AOS_RELEASE.available && 'requiresRelease' in m && m.requiresRelease}
                 >
-                  copy
+                  {AOS_RELEASE.available || !('requiresRelease' in m && m.requiresRelease) ? 'copy' : 'pending release'}
                 </button>
               </div>
               <p class="dim start-note">{m.note}</p>
@@ -130,29 +131,20 @@ const defaultMethod = 'one';
 
       <p class="mono start-meta dim">
         MIT or Apache-2.0 ·
-        <a href="https://github.com/unicity-astrid/astrid">GitHub</a> ·
-        <a href="https://github.com/unicity-astrid/oracles">plugins</a> ·
-        <a href="https://crates.io/crates/astrid">crates.io</a> ·
-        <a href="/book/">The book</a>
+        <a href="https://github.com/astrid-runtime/astrid">Runtime</a> ·
+        <a href="https://github.com/unicity-aos/oracles">plugins</a> ·
+        <a href="https://github.com/unicity-aos/aos-ce/releases">AOS releases</a>
       </p>
     </header>
 
     <section class="start-links">
-      <a class="card start-link" href="/playground/">
-        <span class="mono start-link-k">No install</span>
-        <span>Write a capsule in this tab against the live kernel</span>
+      <a class="card start-link" href="/developers/get-started/">
+        <span class="mono start-link-k">Develop</span>
+        <span>Build a capsule against the AOS workspace</span>
       </a>
-      <a class="card start-link" href="/book/">
-        <span class="mono start-link-k">The book</span>
-        <span>How the machine works, part by part</span>
-      </a>
-      <a class="card start-link" href="https://github.com/unicity-astrid/oracles">
+      <a class="card start-link" href="https://github.com/unicity-aos/oracles">
         <span class="mono start-link-k">Plugins</span>
-        <span>Claude · Grok · Codex for Unicity Astrid OS</span>
-      </a>
-      <a class="card start-link" href="/siri/">
-        <span class="mono start-link-k">Hey Siri</span>
-        <span>Ask the book by voice on any iPhone</span>
+        <span>Claude · Grok · Codex for Unicity AOS</span>
       </a>
     </section>
   </main>

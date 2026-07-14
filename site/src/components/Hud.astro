@@ -9,13 +9,20 @@
 
 <button id="hud" class="hud mono" aria-expanded="false" aria-controls="hud-drawer" title="What's running this page">
   <span id="hud-dot" class="hud-dot" data-state="booting" aria-hidden="true"></span>
-  <span id="hud-text">Waking Astrid…</span>
+  <span id="hud-text">Waking Astrid Runtime…</span>
 </button>
 
-<aside id="hud-drawer" class="hud-drawer card" hidden>
+<aside
+  id="hud-drawer"
+  class="hud-drawer card"
+  role="dialog"
+  aria-modal="false"
+  aria-labelledby="hud-drawer-title"
+  hidden
+>
   <header class="hud-drawer-head">
-    <h2 class="mono">Under the hood</h2>
-    <button id="hud-close" class="hud-close mono" aria-label="Close panel">✕</button>
+    <h2 class="mono" id="hud-drawer-title">Under the hood</h2>
+    <button id="hud-close" class="hud-close mono" type="button" aria-label="Close panel">✕</button>
   </header>
   <dl class="hud-facts mono">
     <div><dt>State</dt><dd id="hud-f-state">Booting</dd></div>
@@ -31,14 +38,11 @@
     Install and uninstall mint and revoke capability tokens on the audit
     chain. Native installs additionally verify publisher signatures.
   </p>
-  <button class="hud-model-remove mono" id="hud-model-remove" hidden>
-    Remove the downloaded AI model from this browser
-  </button>
   <h3 class="mono dim">Audit tail</h3>
   <ol id="hud-audit" class="hud-audit mono" reversed></ol>
   <p class="hud-note dim">
-    This page is static — GitHub Pages, no backend, no demo server. Astrid is
-    not: open devtools → Network and find <code>kernel_web_bg.wasm</code>, the
+    This page is static: GitHub Pages, no backend, no demo server. The embedded
+    Astrid Runtime is not simulated: open devtools → Network and find <code>kernel_web_bg.wasm</code>, the
     same <code>astrid-kernel</code> crate the daemon ships, booted in this
     tab. Every check and every audit entry here is the runtime enforcing its
     own rules — which is the point. Astrid's security model is not a cloud
@@ -107,7 +111,7 @@
 
   /* Phones: the nav is a full-width bar up top, so the status chip and its
      drawer drop below it instead of colliding. */
-  @media (max-width: 640px) {
+  @media (max-width: 900px) {
     .hud {
       top: calc(env(safe-area-inset-top, 0px) + 2.9rem);
     }
@@ -301,12 +305,11 @@
     onSectionCapsules,
     toggleCapsule,
   } from '../scripts/section-capsules';
-  import { FLEET, fleetState, onFleet, toggleFleetCapsule } from '../scripts/fleet-host';
-  import { removeModel } from '../scripts/local-agent';
 
   const $ = (id: string) => document.getElementById(id)!;
   const hud = $('hud');
   const drawer = $('hud-drawer');
+  const closeButton = $('hud-close') as HTMLButtonElement;
   const dot = $('hud-dot');
   const text = $('hud-text');
 
@@ -413,36 +416,8 @@
         capsuleRow(def.name, def.blurb, capsuleState(def.name), () => void toggleCapsule(def.name)),
       );
     }
-    for (const def of FLEET) {
-      list.append(
-        capsuleRow(def.name, def.blurb, fleetState(def.name), () => toggleFleetCapsule(def.name)),
-      );
-    }
   }
   onSectionCapsules(renderCapsules);
-  onFleet(renderCapsules);
-
-  // The download is as reversible as the install: this really deletes the
-  // cached weights (Cache API + IndexedDB), leaving the machine as it was.
-  const modelBtn = $('hud-model-remove') as HTMLButtonElement;
-  modelBtn.addEventListener('click', () => {
-    const bridge = kernel();
-    if (!bridge) return;
-    modelBtn.disabled = true;
-    modelBtn.textContent = 'Removing…';
-    void removeModel(bridge).then(
-      () => {
-        modelBtn.textContent = 'Model removed — nothing left behind';
-        setTimeout(() => {
-          modelBtn.hidden = true;
-        }, 4000);
-      },
-      () => {
-        modelBtn.disabled = false;
-        modelBtn.textContent = 'Removal failed, try again';
-      },
-    );
-  });
 
   hud.addEventListener('click', () => {
     const open = drawer.hidden;
@@ -450,11 +425,18 @@
     hud.setAttribute('aria-expanded', String(open));
     if (open) {
       void refreshAudit();
-      modelBtn.hidden = localStorage.getItem('astrid-agent-optin') !== '1';
+      closeButton.focus();
     }
   });
-  $('hud-close').addEventListener('click', () => {
+
+  function closeDrawer(returnFocus = true): void {
     drawer.hidden = true;
     hud.setAttribute('aria-expanded', 'false');
+    if (returnFocus) hud.focus();
+  }
+
+  closeButton.addEventListener('click', () => closeDrawer());
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !drawer.hidden) closeDrawer();
   });
 </script>

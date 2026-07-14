@@ -6,6 +6,7 @@
  *  static and non-interactive. What IS real: every capsule shown is on GitHub
  *  today, and the manifest is a real Distro.toml. No em-dashes in copy. */
 import Base from '../layouts/Base.astro';
+import { AOS_RELEASE } from '../lib/release';
 
 const platforms = [
   { name: 'Standalone daemon', sel: true },
@@ -40,7 +41,7 @@ const slots: Slot[] = [
   {
     icon: '▤', name: 'The memory', req: 'optional', hint: 'What it learned yesterday, still there today.',
     opts: [
-      { name: 'Cross-session memory', desc: 'Reads .astrid/memory.md into the prompt', key: 'files', sel: true },
+      { name: 'Cross-session memory', desc: 'Reads .unicity-os/memory.md into the prompt', key: 'files', sel: true },
       { name: 'Session store', desc: 'Persistent, append-only conversation history', sel: true },
     ],
   },
@@ -81,47 +82,57 @@ const stack = [
 ];
 const keys = ['files', 'web', 'commands'];
 
-const manifest = `# assembled at astridos.org — a starting point, edit freely
+const manifest = `# assembled at aos.unicity.ai — a starting point, edit freely
 schema-version = 1
 
 [distro]
+id = "wanderer"
 name = "wanderer"
-description = "Assembled with the Astrid builder"
+pretty-name = "Wanderer 0.1.0"
+version = "0.1.0"
+description = "Assembled with the Unicity AOS builder"
+astrid-version = "=0.9.4"
 
 [[capsule]]
-name = "openai-compat"
-source = "unicity/openai-compat"
+name = "astrid-capsule-openai-compat"
+source = "@unicity-aos/capsule-openai-compat"
+version = "0.2.0"
 group = "llm"
-role = "provider"
 
 [[capsule]]
-name = "react"
-source = "unicity/react"
-role = "coordinator"
+name = "astrid-capsule-react"
+source = "@unicity-aos/capsule-react"
+version = "0.2.2"
 
 [[capsule]]
-name = "memory"
-source = "unicity/memory"
+name = "astrid-capsule-memory"
+source = "@unicity-aos/capsule-memory"
+version = "0.2.0"
 
 [[capsule]]
-name = "session"
-source = "unicity/session"
+name = "astrid-capsule-session"
+source = "@unicity-aos/capsule-session"
+version = "0.2.0"
 
 [[capsule]]
-name = "fs"
-source = "unicity/fs"
+name = "astrid-capsule-fs"
+source = "@unicity-aos/capsule-fs"
+version = "0.2.0"
 
 [[capsule]]
-name = "http"
-source = "unicity/http"
+name = "astrid-capsule-http"
+source = "@unicity-aos/capsule-http"
+version = "0.1.1"
 
 [[capsule]]
-name = "shell"
-source = "unicity/shell"
+name = "astrid-capsule-shell"
+source = "@unicity-aos/capsule-shell"
+version = "0.2.0"
 
 [[capsule]]
-name = "cli"
-source = "unicity/cli"
+name = "astrid-capsule-cli"
+source = "@unicity-aos/capsule-cli"
+version = "0.2.0"
 role = "uplink"
 `;
 
@@ -138,15 +149,15 @@ function highlight(src: string): string {
 }
 
 const commands = [
-  { cmd: 'brew install unicity-astrid/tap/astrid', note: 'macOS and Linux, one daemon' },
-  { cmd: 'astrid init --distro ./wanderer.toml', note: 'assembles wanderer from the manifest above' },
-  { cmd: 'astrid distro apply -a wanderer', note: 'the distro lockfile is per-principal' },
+  { cmd: AOS_RELEASE.installCommand, note: `published with the signed AOS ${AOS_RELEASE.version} release` },
+  { cmd: 'aos init', note: 'initializes the product-owned runtime home and Unicity CE composition' },
+  { cmd: 'aos run', note: 'delegates the operator command to the bundled Astrid Runtime' },
 ];
 ---
 
 <Base
-  title="Build your agent — Unicity Astrid OS (concept preview)"
-  description="A preview of the Unicity Astrid OS agent builder: name it, pick where it lives, start from an archetype, and mix and match real capsules into a real Distro.toml. Assembling and installing from this page is coming."
+  title="Build your agent — Unicity AOS (concept preview)"
+  description="A preview of the Unicity AOS agent builder: name it, pick where it lives, start from an archetype, and mix and match real capsules into a real Distro.toml. Assembling and installing from this page is coming."
 >
   <main class="build wrap">
     <header class="build-head">
@@ -161,10 +172,10 @@ const commands = [
         Concept preview. The builder is not live yet: assembling and installing an
         agent from this page is coming, and a build made here would break until
         the backend lands. What is real today, and shown honestly below: every
-        capsule is on <a href="https://github.com/unicity-astrid">GitHub now</a>,
-        the manifest is a real <code>Distro.toml</code>, and
-        <code>astrid init --distro</code> installs one. Until the builder ships,
-        <a href="/start/">install Unicity Astrid OS</a> and run <code>astrid init</code>.
+        capsule is in the <a href="https://github.com/unicity-aos/aos-ce">AOS CE workspace</a>,
+        and the manifest follows the real <code>Distro.toml</code> shape. This
+        preview does not assemble, sign, or install artifacts. Use the
+        <a href="/developers/">developer guide</a> for the supported source workflow.
       </p>
     </header>
 
@@ -289,7 +300,7 @@ const commands = [
           <h2 class="binstall-title">Run it as its own daemon</h2>
           <p class="dim binstall-note">
             The builder would hand you these. Save the Distro.toml, then point
-            <code>astrid init</code> at it: it installs every capsule, prompts for
+            <code>aos init</code> at it: it installs every capsule, prompts for
             any keys, and writes a per-agent lockfile.
           </p>
           <ol class="cmd-list">
