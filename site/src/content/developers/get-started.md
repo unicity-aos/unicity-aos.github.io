@@ -12,9 +12,9 @@ Unicity AOS Community Edition is the public product distribution. Its command is
 ## Release status
 
 AOS `2026.1.0` is the product version being prepared. Until its signed product
-archives, checksums, and installer are published, use the source workspace for
-development and treat the Install page as release staging rather than a live
-channel.
+archives, BLAKE3 and SHA-256 digest manifests, Sigstore bundles, and installer
+are published, use the source workspace for development and treat the Install
+page as release staging rather than a live channel.
 
 ```sh
 git clone https://github.com/unicity-aos/aos-ce.git
@@ -40,8 +40,17 @@ runtime/bin/astrid-emit
 ```
 
 The installer selects a platform archive named
-`unicity-aos-<target>.tar.gz`, verifies it against `SHA256SUMS.txt`, and installs
-the product and its pinned runtime together.
+`unicity-aos-<target>.tar.gz`, downloads that archive's Sigstore bundle, and
+passes the archive itself to `cosign verify-blob`. Verification binds the exact
+downloaded bytes to the AOS release workflow identity and immutable calendar
+version tag before extraction. The product and its pinned runtime are then
+installed together.
+
+The release publishes `BLAKE3SUMS.txt` as its primary digest inventory and
+`SHA256SUMS.txt` for compatibility with external tooling such as Homebrew. The
+archive's schema-2 `release-manifest.json` records the Astrid Runtime input as
+`runtime.digest = "blake3:<64 lowercase hex>"`. The installer does not substitute
+a detached checksum comparison for direct Sigstore archive verification.
 
 ## Initialize Community Edition
 

@@ -1,7 +1,7 @@
 /**
  * Product release metadata has one owner. The release workflow flips
- * `available` only after the AOS CLI, embedded runtime, checksums, signatures,
- * and installer have been published under the same version.
+ * `available` only after the AOS CLI, embedded runtime, BLAKE3 and compatibility
+ * digest manifests, Sigstore bundles, and installer share one published version.
  */
 export const AOS_RELEASE = {
   version: '2026.1.0',

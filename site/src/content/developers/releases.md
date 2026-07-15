@@ -28,9 +28,18 @@ runtime/bin/astrid-build
 runtime/bin/astrid-emit
 ```
 
-`SHA256SUMS.txt` covers every archive. The release workflow signs the supported
-verification material according to product policy before the installer is
-enabled.
+`BLAKE3SUMS.txt` is the primary AOS-owned digest inventory and covers every
+product archive and capsule. `SHA256SUMS.txt` covers the same release assets for
+ecosystem compatibility, including Homebrew. The release workflow signs each
+supported asset, both digest manifests, and the compatibility metadata before
+the installer is enabled. The installer verifies the downloaded archive itself
+with its Sigstore bundle and the expected AOS release workflow identity; it does
+not rely on either digest manifest as a substitute for signature verification.
+
+Each archive also carries a schema-2 `release-manifest.json`. Its
+`runtime.digest` is the canonical algorithm-tagged BLAKE3 digest
+`blake3:<64 lowercase hex>` of the Astrid Runtime archive used to compose that
+product release.
 
 ## Supported targets
 
@@ -47,7 +56,7 @@ Every AOS release records:
 - Astrid Runtime version and source provenance;
 - WIT contract compatibility range;
 - capsule versions and artifact digests in the CE composition;
-- archive digest and signing proof;
+- algorithm-tagged archive and component digests plus signing proof;
 - installer version or commit that understands the archive layout.
 
 The installer resolves only immutable assets from the matching AOS release. It
@@ -60,7 +69,8 @@ does not fetch capsule composition or runtime binaries from mutable `main`.
 3. Build the four product archives from the pinned runtime release.
 4. Smoke-test clean install, upgrade, migration, `aos init`, delegated commands,
    and uninstall or rollback behavior.
-5. Publish archives and `SHA256SUMS.txt` under tag `2026.1.0`.
+5. Publish archives, capsules, `BLAKE3SUMS.txt`, `SHA256SUMS.txt`, Sigstore
+   bundles, and compatibility metadata under tag `2026.1.0`.
 6. Test the canonical root `install.sh` against the published release.
 7. Dispatch and verify `brew install unicity-aos/tap/aos` from the release tap.
 8. Enable the website release switch and installer copy actions.
