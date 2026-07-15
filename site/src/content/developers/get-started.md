@@ -61,6 +61,16 @@ The installer selects a platform archive named
 and installs the product, pinned runtime, and Community Edition capsule set
 together.
 
+Verification passes the archive itself to `cosign verify-blob`, binding the
+downloaded bytes to the AOS release workflow identity and immutable calendar
+version tag before extraction. The release publishes `BLAKE3SUMS.txt` as its
+primary digest inventory and `SHA256SUMS.txt` for compatibility with external
+tooling such as Homebrew.
+
+The archive's schema-2 `release-manifest.json` records the Astrid Runtime input as
+`runtime.digest = "blake3:<64 lowercase hex>"`. The installer does not substitute
+a detached checksum comparison for direct Sigstore archive verification.
+
 ## Initialize Community Edition
 
 After the product release is installed:
