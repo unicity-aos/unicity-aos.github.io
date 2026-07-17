@@ -1,10 +1,9 @@
 ---
-/** Section 1 — hero. Pure type riding the spine; the claim badge is the
- *  first thing that docks onto the rail, and it is literal: the real Astrid
- *  is waking up in this tab. The eye itself lives on the page-wide fixed
- *  layer (CapsuleRing, mounted by the page), not inside the hero. */
+/** Product promise, compatibility, and the free install path. The animated eye
+ *  lives on the page-wide fixed layer mounted by the home page. */
 import unicityMark from '../assets/unicity-wordmark.svg?raw';
 import { AOS_RELEASE } from '../lib/release';
+import AgentMark from './AgentMark.astro';
 ---
 
 <header class="hero" id="top">
@@ -20,17 +19,28 @@ import { AOS_RELEASE } from '../lib/release';
         set:html={unicityMark}
       />
     </p>
+    <p class="eyebrow hero-category">The operating system for AI agents</p>
     <h1 class="hero-title">
-      The operating system<br />for <span class="gradient-text">AI agents</span>.
+      You give it the goal.<br /><span class="gradient-text">It builds the missing ability.</span>
     </h1>
     <p class="hero-sub prose">
-      Give your agent memory, models, tools, and guardrails without handing over
-      the keys. Every ability runs in an isolated capsule, receives only the
-      permissions you choose, and leaves a record of what the system allowed or
-      denied.
+      Unicity AOS runs under the coding agent you already use. When it needs an
+      ability it does not have, it builds one as an isolated extension, shows you
+      exactly what it needs access to, asks for approval, installs it live, and
+      keeps going.
     </p>
 
+    <p class="hero-punch mono">No plugin hunting. No restart. No unrestricted machine access.</p>
+
+    <div class="hero-agents" aria-label="Supported coding agents">
+      <span class="mono hero-agents-label">Works with</span>
+      <AgentMark agent="claude" />
+      <AgentMark agent="grok" />
+      <AgentMark agent="codex" />
+    </div>
+
     <div class="hero-install" data-dock="install">
+      <p class="mono hero-install-label">Free to use. One command.</p>
       <div class="hero-cmd-box">
         <code class="hero-cmd mono" id="hero-install-cmd">{AOS_RELEASE.installCommand}</code>
         {
@@ -46,12 +56,11 @@ import { AOS_RELEASE } from '../lib/release';
           )
         }
       </div>
+      <div class="hero-install-links mono">
+        <a href="/how-it-works/#grow">Watch it extend itself →</a>
+        <a href="/install.sh">Inspect install.sh</a>
+      </div>
     </div>
-
-    <p class="hero-claim mono" id="hero-claim" data-state="booting" data-dock="kernel">
-      <span class="hero-claim-dot" aria-hidden="true"></span>
-      <span id="hero-claim-text">Starting the secure AOS engine in this tab…</span>
-    </p>
     </div>
   </div>
 </header>
@@ -128,7 +137,7 @@ import { AOS_RELEASE } from '../lib/release';
     }
 
     .hero-title {
-      font-size: var(--step-5);
+      font-size: var(--step-4);
     }
   }
 
@@ -139,10 +148,12 @@ import { AOS_RELEASE } from '../lib/release';
   }
 
   .hero-inner > .eyebrow { animation-delay: 0.05s; }
+  .hero-inner > .hero-category { animation-delay: 0.1s; }
   .hero-inner > .hero-title { animation-delay: 0.14s; }
   .hero-inner > .hero-sub { animation-delay: 0.26s; }
-  .hero-inner > .hero-install { animation-delay: 0.34s; }
-  .hero-inner > .hero-claim { animation-delay: 0.44s; }
+  .hero-inner > .hero-punch { animation-delay: 0.31s; }
+  .hero-inner > .hero-agents { animation-delay: 0.36s; }
+  .hero-inner > .hero-install { animation-delay: 0.44s; }
 
   @keyframes hero-rise {
     from {
@@ -196,22 +207,76 @@ import { AOS_RELEASE } from '../lib/release';
     width: auto;
   }
 
+  .hero-category {
+    margin-top: var(--s-3);
+    color: var(--capsule);
+  }
+
   .hero-title {
     font-size: var(--step-5);
     font-weight: 700;
     margin-block: var(--s-3) var(--s-3);
-    max-width: 18ch;
+    max-width: 21ch;
   }
 
   .hero-sub {
     font-size: var(--step-1);
     color: var(--text-dim);
+    max-width: 45rem;
     margin-bottom: var(--s-2);
+  }
+
+  .hero-punch {
+    color: var(--capsule);
+    font-size: var(--step--1);
+    letter-spacing: 0.02em;
+  }
+
+  .hero-agents {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--s-2) var(--s-3);
+    width: fit-content;
+    margin-top: var(--s-3);
+    padding: 0.8rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--bg-raised) 82%, transparent);
+  }
+
+  .hero-agents-label {
+    color: var(--text-faint);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
   }
 
   .hero-install {
     max-width: min(40rem, 100%);
     margin-block: var(--s-3) var(--s-4);
+  }
+
+  .hero-install-label {
+    margin-bottom: var(--s-1);
+    color: var(--text-dim);
+    font-size: var(--step--1);
+  }
+
+  .hero-install-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-1) var(--s-3);
+    margin-top: var(--s-2);
+    font-size: var(--step--1);
+  }
+
+  .hero-install-links a {
+    color: var(--text-dim);
+  }
+
+  .hero-install-links a:hover {
+    color: var(--text);
   }
 
   .hero-cmd-box {
@@ -263,56 +328,9 @@ import { AOS_RELEASE } from '../lib/release';
     background: color-mix(in srgb, var(--capsule) 12%, transparent);
   }
 
-  .hero-claim {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.6em;
-    padding: 0.5em 1em;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    font-size: var(--step--1);
-    color: var(--text-faint);
-    background: var(--bg-raised);
-  }
-
-  .hero-claim-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--text-faint);
-    flex: none;
-  }
-
-  .hero-claim[data-state='online'] {
-    color: var(--text-dim);
-    border-color: color-mix(in srgb, var(--bus) 35%, transparent);
-  }
-
-  .hero-claim[data-state='online'] .hero-claim-dot {
-    background: var(--bus);
-    box-shadow: 0 0 8px var(--bus);
-  }
 </style>
 
 <script>
-  import { onKernel, kernelStatus, kernel } from '../scripts/kernel';
-
-  // Elements are re-created on every client-router visit; the module is not.
-  // Re-apply the current kernel state to whatever hero is in the DOM.
-  function apply(): void {
-    const claim = document.getElementById('hero-claim');
-    const text = document.getElementById('hero-claim-text');
-    if (!claim || !text) return;
-    const status = kernelStatus();
-    const bridge = kernel();
-    claim.dataset.state = status;
-    if (status === 'online' && bridge) {
-      text.textContent = 'This page is static. The secure AOS engine is running in this tab';
-    } else if (status === 'offline') {
-      text.textContent = 'The AOS engine can’t run in this browser · showing the product without the live engine';
-    }
-  }
-
   function wireCopy(): void {
     const hero = document.querySelector('.hero');
     if (!hero || (hero as HTMLElement).dataset.copyWired) return;
@@ -334,10 +352,8 @@ import { AOS_RELEASE } from '../lib/release';
     });
   }
 
-  onKernel(apply);
   wireCopy();
   document.addEventListener('astro:page-load', () => {
-    apply();
     wireCopy();
   });
 </script>

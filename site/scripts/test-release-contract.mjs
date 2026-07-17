@@ -38,7 +38,17 @@ for (const forbidden of ['astrid@astrid-oracles', 'astrid@unicity-aos/oracles'])
 assert.ok(!home.includes('<button class="mono hero-copy"'), 'staged home page exposed an installer copy action');
 assert.ok(!home.includes('Install options'), 'home page retained the redundant hero CTA row');
 assert.ok(!home.includes('class="home-next'), 'home page retained the redundant next-step cards');
-assert.ok(home.includes('A small, secure engine'), 'home page does not explain the AOS engine');
+assert.ok(home.includes('You give it the goal'), 'home page does not lead with the user goal');
+assert.ok(home.includes('It builds the missing ability'), 'home page does not lead with safe self-extension');
+assert.ok(home.includes('It knows what to build because it knows what you want'), 'home page does not explain goal-driven extension');
+for (const agent of ['Claude Code', 'Grok Build', 'Codex']) {
+  assert.ok(home.includes(agent), `home page does not show ${agent} compatibility`);
+}
+assert.ok(home.includes('The agents have opinions'), 'home page is missing the agent response section');
+assert.ok(home.includes('network: status.company.com, api.github.com'), 'home page is missing the concrete self-extension example');
+assert.ok(home.includes('Free to use. One command.'), 'home page does not make the free install clear');
+assert.ok(home.includes('No plugin hunting. No restart. No unrestricted machine access.'), 'home page is missing the fast safety payoff');
+assert.ok(home.includes('Inspect install.sh'), 'home page does not expose the installer for inspection');
 assert.ok(!home.includes('Astrid Runtime'), 'home page should remain product-first');
 assert.ok(!developers.includes('Redirecting'), 'developer root rendered a visible redirect page');
 assert.ok(developers.includes('Astrid is the secure engine inside Unicity AOS'));

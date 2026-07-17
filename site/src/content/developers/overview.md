@@ -10,6 +10,12 @@ run, a set of abilities, and a security boundary around what those abilities can
 do. Developers compose the system from capsules instead of baking models, tools,
 memory, and guardrails into one privileged process.
 
+The agent can use the same model to extend itself. When it reaches a goal that
+requires a missing ability, it can design a capsule, declare the access that
+capsule needs, build it, and request live installation. The operator approves
+the capability boundary before the new ability runs. The agent decides what it
+needs to build from the goal; the user does not have to begin with a capsule idea.
+
 This guide is organized as a manual: read it from start to finish for a first contribution, or use the chapter sidebar as a reference while you work.
 
 It covers Community Edition, capsule development, the AOS CLI and HTTP API,
