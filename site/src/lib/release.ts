@@ -1,4 +1,4 @@
-const installer = "curl --proto '=https' --tlsv1.2 -fsSL https://aos.unicity.ai/install.sh | sh";
+const installer = 'curl -fsSL https://aos.unicity.ai/install.sh | sh';
 const channelAvailability = {
   stable: false,
   dev: false,

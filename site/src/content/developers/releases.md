@@ -51,11 +51,11 @@ Stable is the default. Dev and nightly must be selected explicitly:
 
 ```sh
 # Stable default
-curl --proto '=https' --tlsv1.2 -fsSL https://aos.unicity.ai/install.sh | sh
+curl -fsSL https://aos.unicity.ai/install.sh | sh
 
 # Explicit prerelease channels
-curl --proto '=https' --tlsv1.2 -fsSL https://aos.unicity.ai/install.sh | sh -s -- --channel dev
-curl --proto '=https' --tlsv1.2 -fsSL https://aos.unicity.ai/install.sh | sh -s -- --channel nightly
+curl -fsSL https://aos.unicity.ai/install.sh | sh -s -- --channel dev
+curl -fsSL https://aos.unicity.ai/install.sh | sh -s -- --channel nightly
 ```
 
 These are contract examples, not claims that a channel is live. All three are
@@ -89,7 +89,7 @@ does not fetch capsule composition or runtime binaries from mutable `main`.
 1. Freeze and test the CE workspace lock.
 2. Build and verify every capsule artifact.
 3. Build the four product archives from the pinned runtime release.
-4. Smoke-test clean install, upgrade, migration, `aos init`, delegated commands,
+4. Smoke-test clean install, reinstall/self-heal, upgrade, `aos init`, delegated commands,
    and uninstall or rollback behavior.
 5. Publish archives, capsules, `BLAKE3SUMS.txt`, `SHA256SUMS.txt`, Sigstore
    bundles, and compatibility metadata under tag `2026.1.0`.
@@ -97,7 +97,7 @@ does not fetch capsule composition or runtime binaries from mutable `main`.
 7. Dispatch and verify `brew install unicity-aos/tap/aos` from the release tap.
 8. Promote signed stable-channel metadata, then enable the website release switch
    and installer copy actions.
-9. Verify `curl --proto '=https' --tlsv1.2 -fsSL https://aos.unicity.ai/install.sh | sh` on every target.
+9. Verify `curl -fsSL https://aos.unicity.ai/install.sh | sh` on every target.
 
 Website metadata, `aos --version`, archive tag, and documentation must agree.
 

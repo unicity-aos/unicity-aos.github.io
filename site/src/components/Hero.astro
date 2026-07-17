@@ -21,16 +21,13 @@ import { AOS_RELEASE } from '../lib/release';
       />
     </p>
     <h1 class="hero-title">
-      A modular operating system<br />for <span class="gradient-text">AI agents</span>.
+      The operating system<br />for <span class="gradient-text">AI agents</span>.
     </h1>
     <p class="hero-sub prose">
-      Every ability is a sealed capsule: the model, the memory, the tools, the
-      guards. Snap them together into an agent, swap any part later, and it can
-      never take more than you gave it. Unicity AOS brings the runtime,
-      distribution, and product experience together for the agent you already use.
-    </p>
-    <p class="hero-kicker">
-      Let your AI actually do things, without handing over the keys.
+      Give your agent memory, models, tools, and guardrails without handing over
+      the keys. Astrid—the secure engine beneath Unicity AOS—runs every ability
+      in an isolated capsule, grants only the permissions you choose, and records
+      what it allowed or denied.
     </p>
 
     <div class="hero-install" data-dock="install">
@@ -59,16 +56,6 @@ import { AOS_RELEASE } from '../lib/release';
       </p>
     </div>
 
-    <div class="hero-ctas">
-      <a class="btn btn-primary" href="/start/">Install options</a>
-      <a class="btn" href="/how-it-works/">See how it works</a>
-      <a class="btn" href="/build/">Build your agent</a>
-    </div>
-    <p class="hero-works mono">
-      {AOS_RELEASE.oracles.available ? 'AOS Oracle plugins for' : 'AOS Oracle plugins staged for'}
-      {' '}<strong>Claude Code</strong>, <strong>Grok Build</strong>, and <strong>Codex</strong>
-      {' '}— identity <strong>{AOS_RELEASE.oracles.pluginIdentity}</strong>.
-    </p>
     <p class="hero-claim mono" id="hero-claim" data-state="booting" data-dock="kernel">
       <span class="hero-claim-dot" aria-hidden="true"></span>
       <span id="hero-claim-text">Starting the Astrid Runtime inside Unicity AOS…</span>
@@ -78,13 +65,11 @@ import { AOS_RELEASE } from '../lib/release';
 </header>
 
 <style>
-  /* The hero is taller than the screen: the extra height is the scroll the
-     visitor spends condensing the burst into the dot on the rail. The stage
-     stays pinned while that happens; everything is a pure function of scroll
-     position, so scrolling back up re-opens the eye exactly. */
+  /* One short pinned beat gives the runtime eye room to condense. Copy remains
+     fully visible through most of it and only leaves at the end. */
   .hero {
     position: relative;
-    height: 240svh;
+    height: 180svh;
   }
 
   .hero-stage {
@@ -97,11 +82,12 @@ import { AOS_RELEASE } from '../lib/release';
   }
 
   .hero-inner {
+    --hero-exit: clamp(0, calc((var(--hero-p, 0) - 0.72) * 3.5714), 1);
     position: relative;
     z-index: 1;
     padding-block: var(--s-7);
-    opacity: calc(1 - var(--hero-p, 0) * 1.6);
-    translate: 0 calc(var(--hero-p, 0) * -5rem);
+    opacity: calc(1 - var(--hero-exit));
+    translate: 0 calc(var(--hero-exit) * -2rem);
   }
 
   .hero.is-condensed .hero-inner {
@@ -164,11 +150,8 @@ import { AOS_RELEASE } from '../lib/release';
   .hero-inner > .eyebrow { animation-delay: 0.05s; }
   .hero-inner > .hero-title { animation-delay: 0.14s; }
   .hero-inner > .hero-sub { animation-delay: 0.26s; }
-  .hero-inner > .hero-kicker { animation-delay: 0.33s; }
-  .hero-inner > .hero-install { animation-delay: 0.38s; }
-  .hero-inner > .hero-ctas { animation-delay: 0.46s; }
-  .hero-inner > .hero-works { animation-delay: 0.52s; }
-  .hero-inner > .hero-claim { animation-delay: 0.6s; }
+  .hero-inner > .hero-install { animation-delay: 0.34s; }
+  .hero-inner > .hero-claim { animation-delay: 0.44s; }
 
   @keyframes hero-rise {
     from {
@@ -223,10 +206,10 @@ import { AOS_RELEASE } from '../lib/release';
   }
 
   .hero-title {
-    font-size: var(--step-6);
+    font-size: var(--step-5);
     font-weight: 700;
     margin-block: var(--s-3) var(--s-3);
-    max-width: 16ch;
+    max-width: 18ch;
   }
 
   .hero-sub {
@@ -235,16 +218,9 @@ import { AOS_RELEASE } from '../lib/release';
     margin-bottom: var(--s-2);
   }
 
-  .hero-kicker {
-    font-size: var(--step-0);
-    color: var(--text);
-    max-width: var(--prose-w);
-    margin-bottom: var(--s-3);
-  }
-
   .hero-install {
     max-width: min(40rem, 100%);
-    margin-bottom: var(--s-4);
+    margin-block: var(--s-3) var(--s-4);
   }
 
   .hero-cmd-box {
@@ -308,28 +284,6 @@ import { AOS_RELEASE } from '../lib/release';
 
   .hero-install-note a:hover {
     color: var(--bus);
-  }
-
-  .hero-ctas {
-    display: flex;
-    gap: var(--s-2);
-    flex-wrap: wrap;
-    margin-bottom: var(--s-3);
-  }
-
-  .hero-works {
-    display: block;
-    width: fit-content;
-    max-width: 42rem;
-    font-size: var(--step--1);
-    color: var(--text-faint);
-    margin-bottom: var(--s-4);
-    line-height: 1.5;
-  }
-
-  .hero-works strong {
-    color: var(--text-dim);
-    font-weight: 600;
   }
 
   .hero-claim {

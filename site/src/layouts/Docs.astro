@@ -16,6 +16,7 @@ interface Props {
 
 const { guideTitle, basePath, title, nav, currentSlug, headings, prev, next } = Astro.props;
 const toc = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
+const guideHref = (slug: string) => slug === 'overview' ? `${basePath}/` : `${basePath}/${slug}/`;
 ---
 
 <Base title={`${title} · ${guideTitle}`} description={`${guideTitle}: ${title}`}>
@@ -30,7 +31,7 @@ const toc = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
               {group.items.map((item) => (
                 <li>
                   <a
-                    href={`${basePath}/${item.slug}/`}
+                    href={guideHref(item.slug)}
                     aria-current={item.slug === currentSlug ? 'page' : undefined}
                   >
                     {item.title}
@@ -51,7 +52,7 @@ const toc = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
       <footer class="docs-pager hairline-top">
         {
           prev ? (
-            <a class="pager-link" href={`${basePath}/${prev.slug}/`}>
+            <a class="pager-link" href={guideHref(prev.slug)}>
               <span class="mono dim">← previous</span>
               <span>{prev.title}</span>
             </a>
@@ -61,7 +62,7 @@ const toc = headings.filter((h) => h.depth >= 2 && h.depth <= 3);
         }
         {
           next && (
-            <a class="pager-link pager-next" href={`${basePath}/${next.slug}/`}>
+            <a class="pager-link pager-next" href={guideHref(next.slug)}>
               <span class="mono dim">next →</span>
               <span>{next.title}</span>
             </a>

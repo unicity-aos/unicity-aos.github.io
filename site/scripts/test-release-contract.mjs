@@ -3,10 +3,11 @@ import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
-const [start, home, getStarted, integrations, llms, publicInstaller, builtInstaller] =
+const [start, home, developers, getStarted, integrations, llms, publicInstaller, builtInstaller] =
   await Promise.all([
     read('dist/start/index.html'),
     read('dist/index.html'),
+    read('dist/developers/index.html'),
     read('dist/developers/get-started/index.html'),
     read('dist/developers/integrations/index.html'),
     read('dist/llms.txt'),
@@ -37,6 +38,13 @@ for (const forbidden of ['astrid@astrid-oracles', 'astrid@unicity-aos/oracles'])
 }
 
 assert.ok(!home.includes('<button class="mono hero-copy"'), 'staged home page exposed an installer copy action');
+assert.ok(!home.includes('Install options'), 'home page retained the redundant hero CTA row');
+assert.ok(!home.includes('class="home-next'), 'home page retained the redundant next-step cards');
+assert.ok(home.includes('Astrid is the secure engine'), 'home page does not explain Astrid');
+assert.ok(!developers.includes('Redirecting'), 'developer root rendered a visible redirect page');
+assert.ok(developers.includes('Astrid is the secure engine inside Unicity AOS'));
+assert.ok(!developers.includes('What stays with Astrid Runtime'));
+assert.ok(!home.includes("curl --proto '=https'"), 'public install command is unnecessarily verbose');
 assert.ok(getStarted.includes('not published'), 'get-started guide must state that channels are unavailable');
 assert.ok(llms.includes('stable, dev, nightly, Homebrew, and AOS Oracle installs are closed'));
 assert.equal(builtInstaller, publicInstaller, 'Astro changed the mirrored installer bytes');
