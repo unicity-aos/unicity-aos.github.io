@@ -11,7 +11,7 @@ permissions:
 env:
   # Existing aos-ce revision mirrored by site/public/install.sh. Update this full
   # commit and the mirror together after the canonical channel installer lands.
-  AOS_INSTALLER_SOURCE_COMMIT: eb63fffe1250298045faa666841fae3a9cb101a4
+  AOS_INSTALLER_SOURCE_COMMIT: dfa1d71c2737a016d8d4dd169d0755ff624f6b50
 
 concurrency:
   group: pages

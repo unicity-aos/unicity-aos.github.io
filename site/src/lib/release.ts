@@ -17,7 +17,7 @@ const oraclesAvailable = false;
  * is available.
  */
 export const AOS_RELEASE = {
-  version: '2026.1.0',
+  version: '2026.1.1',
   status: 'released',
   available: channelAvailability.stable,
   defaultChannel: 'stable',

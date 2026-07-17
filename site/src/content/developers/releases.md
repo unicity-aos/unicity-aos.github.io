@@ -6,12 +6,12 @@ order: 90
 ---
 
 Unicity AOS versions independently from Astrid Runtime. Product releases use
-calendar SemVer: `2026.1.0` is the first stable 2026 release; compatible fixes
+calendar SemVer: `2026.1.1` is the first stable 2026 release; compatible fixes
 advance the patch and compatible product features advance the minor.
 
 ## Release identity
 
-The Git tag and product version are `2026.1.0` with no `v` prefix. Release
+The Git tag and product version are `2026.1.1` with no `v` prefix. Release
 archives use:
 
 ```text
@@ -57,7 +57,7 @@ curl -fsSL https://aos.unicity.ai/install.sh | sh -s -- --channel dev
 curl -fsSL https://aos.unicity.ai/install.sh | sh -s -- --channel nightly
 ```
 
-Stable is live for `2026.1.0`. Dev and nightly remain closed until their signed
+Stable is live for `2026.1.1`. Dev and nightly remain closed until their signed
 channel pointers are published. The installer must resolve a selected channel to
 signed release metadata and an immutable tag. Missing, invalid, or mismatched
 channel metadata stops installation; it never falls back to another channel.
@@ -91,7 +91,7 @@ does not fetch capsule composition or runtime binaries from mutable `main`.
 4. Smoke-test clean install, reinstall/self-heal, upgrade, `aos init`, delegated commands,
    and uninstall or rollback behavior.
 5. Publish archives, capsules, `BLAKE3SUMS.txt`, `SHA256SUMS.txt`, Sigstore
-   bundles, and compatibility metadata under tag `2026.1.0`.
+   bundles, and compatibility metadata under tag `2026.1.1`.
 6. Test the canonical root `install.sh` against the published release.
 7. Dispatch and verify `brew install unicity-aos/tap/aos` from the release tap.
 8. Promote signed stable-channel metadata, then enable the website release switch
