@@ -15,7 +15,7 @@ release, so the complete runtime command set remains available through one CLI.
 | Command | Behavior |
 | --- | --- |
 | `aos --help` | product help and delegation boundary |
-| `aos --version` | AOS calendar-SemVer version, such as `2026.1.0` |
+| `aos --version` | AOS calendar-SemVer version, such as `2026.1.1` |
 | `aos init` | apply the Unicity CE manifest embedded in this product release |
 | `aos status [--json]` | read typed local runtime status without invoking the runtime CLI |
 | `aos serve-health` | bind the narrow loopback health endpoint |
