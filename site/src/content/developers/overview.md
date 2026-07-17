@@ -13,8 +13,7 @@ memory, and guardrails into one privileged process.
 This guide is organized as a manual: read it from start to finish for a first contribution, or use the chapter sidebar as a reference while you work.
 
 It covers Community Edition, capsule development, the AOS CLI and HTTP API,
-host integrations, testing, and releases. Commands marked as unavailable remain
-closed until matching signed artifacts are published.
+host integrations, testing, and releases.
 
 ## The engine underneath
 

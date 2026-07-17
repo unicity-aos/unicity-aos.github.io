@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
@@ -24,9 +24,7 @@ for (const button of copyButtons) {
 for (const expected of [
   '--channel dev',
   '--channel nightly',
-  'stable closed',
-  'dev closed',
-  'nightly closed',
+  'coming soon',
   'aos@aos-oracles',
 ]) {
   assert.ok(start.includes(expected), `rendered install page is missing ${expected}`);
@@ -40,13 +38,22 @@ for (const forbidden of ['astrid@astrid-oracles', 'astrid@unicity-aos/oracles'])
 assert.ok(!home.includes('<button class="mono hero-copy"'), 'staged home page exposed an installer copy action');
 assert.ok(!home.includes('Install options'), 'home page retained the redundant hero CTA row');
 assert.ok(!home.includes('class="home-next'), 'home page retained the redundant next-step cards');
-assert.ok(home.includes('Astrid is the secure engine'), 'home page does not explain Astrid');
+assert.ok(home.includes('A small, secure engine'), 'home page does not explain the AOS engine');
+assert.ok(!home.includes('Astrid Runtime'), 'home page should remain product-first');
 assert.ok(!developers.includes('Redirecting'), 'developer root rendered a visible redirect page');
 assert.ok(developers.includes('Astrid is the secure engine inside Unicity AOS'));
 assert.ok(!developers.includes('What stays with Astrid Runtime'));
 assert.ok(!home.includes("curl --proto '=https'"), 'public install command is unnecessarily verbose');
-assert.ok(getStarted.includes('not published'), 'get-started guide must state that channels are unavailable');
-assert.ok(llms.includes('stable, dev, nightly, Homebrew, and AOS Oracle installs are closed'));
+assert.ok(getStarted.includes('must stop without installing'), 'get-started guide must document fail-closed channels');
+assert.ok(llms.includes('Unavailable channels fail closed'));
 assert.equal(builtInstaller, publicInstaller, 'Astro changed the mirrored installer bytes');
+
+const generatedRoot = new URL('../dist/', import.meta.url);
+const generatedTextFiles = (await readdir(generatedRoot, { recursive: true }))
+  .filter((path) => /\.(?:html|js|txt)$/.test(path));
+for (const path of generatedTextFiles) {
+  const contents = await readFile(new URL(path, generatedRoot), 'utf8');
+  assert.ok(!contents.includes('—'), `${path} contains an em dash`);
+}
 
 console.log('release/install surfaces are staged and fail closed');

@@ -25,9 +25,9 @@ import { AOS_RELEASE } from '../lib/release';
     </h1>
     <p class="hero-sub prose">
       Give your agent memory, models, tools, and guardrails without handing over
-      the keys. Astrid—the secure engine beneath Unicity AOS—runs every ability
-      in an isolated capsule, grants only the permissions you choose, and records
-      what it allowed or denied.
+      the keys. Every ability runs in an isolated capsule, receives only the
+      permissions you choose, and leaves a record of what the system allowed or
+      denied.
     </p>
 
     <div class="hero-install" data-dock="install">
@@ -46,19 +46,11 @@ import { AOS_RELEASE } from '../lib/release';
           )
         }
       </div>
-      <p class="hero-install-note mono dim">
-        {
-          AOS_RELEASE.available
-            ? 'Stable channel · signed AOS product bundle · '
-            : `Stable command staged for ${AOS_RELEASE.version}; all release channels are closed · `
-        }
-        <a href="/start/">release status and integrations →</a>
-      </p>
     </div>
 
     <p class="hero-claim mono" id="hero-claim" data-state="booting" data-dock="kernel">
       <span class="hero-claim-dot" aria-hidden="true"></span>
-      <span id="hero-claim-text">Starting the Astrid Runtime inside Unicity AOS…</span>
+      <span id="hero-claim-text">Starting the secure AOS engine in this tab…</span>
     </p>
     </div>
   </div>
@@ -271,20 +263,6 @@ import { AOS_RELEASE } from '../lib/release';
     background: color-mix(in srgb, var(--capsule) 12%, transparent);
   }
 
-  .hero-install-note {
-    margin-top: 0.55rem;
-    font-size: var(--step--1);
-    line-height: 1.5;
-  }
-
-  .hero-install-note a {
-    color: var(--text-dim);
-  }
-
-  .hero-install-note a:hover {
-    color: var(--bus);
-  }
-
   .hero-claim {
     display: inline-flex;
     align-items: center;
@@ -329,9 +307,9 @@ import { AOS_RELEASE } from '../lib/release';
     const bridge = kernel();
     claim.dataset.state = status;
     if (status === 'online' && bridge) {
-      text.textContent = 'This page is static. Astrid Runtime, the engine beneath Unicity AOS, is running in this tab';
+      text.textContent = 'This page is static. The secure AOS engine is running in this tab';
     } else if (status === 'offline') {
-      text.textContent = 'Astrid Runtime can’t run in this browser · showing the AOS story without the live engine';
+      text.textContent = 'The AOS engine can’t run in this browser · showing the product without the live engine';
     }
   }
 
