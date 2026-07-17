@@ -19,6 +19,7 @@ mkdir -p "$AOS_HOME/bin"
 printf '#!/bin/sh\nexit 0\n' > "$AOS_HOME/bin/aos"
 chmod 755 "$AOS_HOME/bin/aos"
 printf 'Installed Unicity AOS 2026.1.1.\n'
+printf 'Run: aos init\n'
 printf 'Run: %s/bin/aos init\n' "$AOS_HOME"
 EOF
 
@@ -49,5 +50,19 @@ if grep -Fq 'aos init' <<<"$output"; then
   exit 1
 fi
 test ! -e "$home/.astrid"
+
+: > "$log"
+HOME="$home" AOS_HOME="$home/.aos" TEST_LOG="$log" TEST_ASSETS="$assets" \
+  "$root/public/install.sh" \
+    --base-installer "$work/base-install.sh" \
+    --oracle-installer "$work/oracle-install.sh" \
+    --oracle-assets "$assets" \
+    --all --channel dev >/dev/null
+grep -Fq 'base <--no-migrate-prompt> <--channel> <dev>' "$log"
+grep -Fq 'oracle <--plugins-only> <--no-install-aos> <--yes>' "$log"
+if grep -Fq -- '<--all>' "$log"; then
+  echo "public --all bypassed detected-host selection" >&2
+  exit 1
+fi
 
 echo "public installer composes base and host plugins without migration or init"

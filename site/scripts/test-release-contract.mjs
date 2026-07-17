@@ -102,6 +102,9 @@ assert.equal(builtOracleInstaller, publicOracleInstaller, 'Astro changed the Ora
 assert.ok(publicInstaller.includes('--plugins-only'), 'public installer does not install host plugins');
 assert.ok(publicInstaller.includes('--no-migrate-prompt'), 'public installer can launch the legacy migration prompt');
 assert.ok(publicInstaller.includes('--oracle-installer'), 'public installer lacks the local Oracle test override');
+assert.ok(publicInstaller.includes('--channel'), 'public installer lacks AOS channel passthrough');
+assert.ok(publicInstaller.includes('--version'), 'public installer lacks exact-version passthrough');
+assert.ok(publicInstaller.includes("--proto-redir '=https'"), 'public installer permits redirect protocol downgrade');
 
 const generatedRoot = new URL('../dist/', import.meta.url);
 const generatedTextFiles = (await readdir(generatedRoot, { recursive: true }))
