@@ -105,6 +105,18 @@ assert.ok(publicInstaller.includes('--oracle-installer'), 'public installer lack
 assert.ok(publicInstaller.includes('--channel'), 'public installer lacks AOS channel passthrough');
 assert.ok(publicInstaller.includes('--version'), 'public installer lacks exact-version passthrough');
 assert.ok(publicInstaller.includes("--proto-redir '=https'"), 'public installer permits redirect protocol downgrade');
+assert.ok(
+  publicOracleInstaller.includes('AOS_ORACLES_VERSION:-0.2.6'),
+  'public installer does not default to the current signed Oracle release',
+);
+assert.ok(
+  publicOracleInstaller.includes('pack_aos_capsules_tsv'),
+  'public installer cannot resolve AOS-owned capsule dependencies from signed packs',
+);
+assert.ok(
+  publicOracleInstaller.includes('resolve_aos_capsules "$principal"'),
+  'public installer does not provision AOS-owned capsule dependencies for the host principal',
+);
 
 const generatedRoot = new URL('../dist/', import.meta.url);
 const generatedTextFiles = (await readdir(generatedRoot, { recursive: true }))
