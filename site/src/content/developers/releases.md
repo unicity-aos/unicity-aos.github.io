@@ -88,7 +88,7 @@ does not fetch capsule composition or runtime binaries from mutable `main`.
 1. Freeze and test the CE workspace lock.
 2. Build and verify every capsule artifact.
 3. Build the four product archives from the pinned runtime release.
-4. Smoke-test clean install, reinstall/self-heal, upgrade, `aos init`, delegated commands,
+4. Smoke-test clean install, reinstall/self-heal, upgrade, delegated commands,
    and uninstall or rollback behavior.
 5. Publish archives, capsules, `BLAKE3SUMS.txt`, `SHA256SUMS.txt`, Sigstore
    bundles, and compatibility metadata under tag `2026.1.1`.

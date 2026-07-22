@@ -68,16 +68,9 @@ a detached checksum comparison for direct Sigstore archive verification.
 
 ## Start a host plugin
 
-No manual `aos init` is required for Claude Code, Codex, or Grok Build. Start a
-selected host after installation. Its plugin provisions only that host's named
-principal and Oracle pack.
-
-`aos init` remains available when an operator deliberately wants a standalone
-Community Edition administration workspace:
-
-```sh
-aos init
-```
+No manual post-install activation command is required for Claude Code, Codex,
+or Grok Build. Start a selected host after installation. Its plugin provisions
+only that host's named principal and Oracle pack.
 
 The release also publishes the Homebrew formula:
 
@@ -88,13 +81,9 @@ brew install unicity-aos/tap/aos
 The tap repository and formula automation can exist before the formula itself.
 The command works only after the stable release publishes and verifies it.
 
-`aos init` materializes the Unicity CE manifest installed from the same product
-release. It does not fetch a mutable manifest from `main`. The wrapper sets
-the product runtime home and `.aos` project layout only for its child
-runtime, so standalone Astrid state remains separate.
-
-For unattended initialization, review the variables and requested capabilities
-before using `--yes`. Use `AOS_HOME` for disposable CI state.
+The installer applies the Unicity CE manifest from the same signed product
+release. It does not fetch a mutable manifest from `main`. The wrapper keeps
+the product runtime home separate from standalone Astrid state.
 
 ## Verify the installation
 

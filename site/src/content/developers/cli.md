@@ -6,7 +6,7 @@ order: 100
 ---
 
 `aos` is the product command. It owns the product home, Community Edition
-initialization, health projection, version identity, and update policy.
+composition, health projection, version identity, and update policy.
 Lower-level operator commands use the Astrid engine bundled in the same AOS
 release, so the complete runtime command set remains available through one CLI.
 
@@ -16,7 +16,6 @@ release, so the complete runtime command set remains available through one CLI.
 | --- | --- |
 | `aos --help` | product help and delegation boundary |
 | `aos --version` | AOS calendar-SemVer version, such as `2026.1.1` |
-| `aos init` | apply the Unicity CE manifest embedded in this product release |
 | `aos status [--json]` | read typed local runtime status without invoking the runtime CLI |
 | `aos serve-health` | bind the narrow loopback health endpoint |
 | `aos update` | update the AOS product and bundled runtime together from a signed channel or exact version |
@@ -24,15 +23,8 @@ release, so the complete runtime command set remains available through one CLI.
 `aos self-update` remains an alias for `aos update`. `aos distro` is also
 product-owned and refuses replacement of the Unicity CE composition.
 
-`aos init` accepts the runtime's supported non-distro onboarding flags:
-
-```sh
-aos init --yes
-aos init --offline
-aos init --var openai_model=gpt-5.4
-```
-
-It rejects `--distro` because AOS initialization always composes Unicity CE. A
+The public installer applies the embedded Community Edition composition and
+wires the selected host plugins. There is no separate activation step. A
 developer who deliberately wants another distribution uses standalone Astrid
 Runtime outside the product installation.
 
@@ -62,8 +54,8 @@ not maintain a second parser for every runtime flag.
 Use `AOS_HOME` to isolate a development or CI installation:
 
 ```sh
-export AOS_HOME="$(mktemp -d)"
-aos init --yes
+export AOS_HOME=/absolute/path/to/aos-home
+aos status
 ```
 
 Do not export `ASTRID_HOME` globally as an AOS setup step. The wrapper owns that

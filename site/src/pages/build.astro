@@ -151,9 +151,9 @@ function highlight(src: string): string {
 const commands = [
   {
     cmd: AOS_RELEASE.channels.stable.command,
-    note: 'installs AOS from the stable channel',
+    note: 'installs AOS and applies the signed Community Edition composition',
   },
-  { cmd: 'aos init', note: 'initializes the product-owned runtime home and Unicity CE composition' },
+  { cmd: 'aos status', note: 'checks the installed product runtime' },
   { cmd: 'aos run', note: 'runs the selected agent through the bundled engine' },
 ];
 ---
@@ -303,9 +303,9 @@ const commands = [
           <h2 class="binstall-title">Run it as its own daemon</h2>
           <p class="dim binstall-note">
             This manifest is a composition preview, not an install input.
-            <code>aos init</code> installs the fixed Unicity CE composition
-            embedded in the signed AOS release; it does not accept this preview
-            as a replacement distribution.
+            The installer applies the fixed Unicity CE composition embedded in
+            the signed AOS release; it does not accept this preview as a
+            replacement distribution.
           </p>
           <ol class="cmd-list">
             {
