@@ -124,7 +124,7 @@ const generatedTextFiles = (await readdir(generatedRoot, { recursive: true }))
 for (const path of generatedTextFiles) {
   const contents = await readFile(new URL(path, generatedRoot), 'utf8');
   assert.ok(!contents.includes('—'), `${path} contains an em dash`);
-  assert.ok(!contents.includes('aos init'), `${path} exposes the retired manual activation step`);
+  assert.doesNotMatch(contents, /\baos\s+init\b/, `${path} exposes the retired manual activation step`);
 }
 
 console.log('stable release surfaces are live; unpublished channels fail closed');
