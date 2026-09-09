@@ -9,7 +9,7 @@ permissions:
 
 env:
   AOS_INSTALLER_SOURCE_COMMIT: 8527d13c9c54e947b85c80fb0b5c385f8fdf30b3
-  ORACLE_INSTALLER_SOURCE_COMMIT: 816e1940c06b7b925957980e322f5d4961e6ca80
+  ORACLE_INSTALLER_SOURCE_COMMIT: cfd6c39784fea174b363b1bfb90fd5804a49df15
 
 concurrency:
   group: website-ci-${{ github.event.pull_request.number }}
