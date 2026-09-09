@@ -3,6 +3,19 @@ import { readFile, readdir } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
+// Deployment must validate the same immutable installer sources as PR CI.
+const [ciWorkflow, pagesWorkflow] = await Promise.all([
+  read('../.github/workflows/ci.yml'),
+  read('../.github/workflows/pages.yml'),
+]);
+for (const key of ['AOS_INSTALLER_SOURCE_COMMIT', 'ORACLE_INSTALLER_SOURCE_COMMIT']) {
+  const pin = new RegExp(`^  ${key}: ([a-f0-9]{40})$`, 'm');
+  const ci = ciWorkflow.match(pin)?.[1];
+  const pages = pagesWorkflow.match(pin)?.[1];
+  assert.ok(ci && pages, `${key} must be pinned in CI and Pages`);
+  assert.equal(pages, ci, `${key} differs between CI and deployment`);
+}
+
 const [
   start,
   home,
