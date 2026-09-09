@@ -553,26 +553,97 @@ validate_accepted_channel() {
   fi
 }
 
+validate_musl_release_metadata() {
+  musl_metadata=$1
+  legacy_metadata=$2
+  # Canonical output of musl_release_metadata.py; no Python is required by
+  # the bootstrap installer. Reject duplicate, missing and unknown fields.
+  awk '
+    BEGIN {
+      fields[""] = "schema-version kind product repository version tag source-commit release-workflow-identity"
+      fields["[legacy-release]"] = "metadata-asset metadata-sha256"
+      fields["[runtime-musl]"] = "repository version tag source-commit release-workflow-identity legacy-release-metadata-asset legacy-release-metadata-blake3 musl-release-metadata-asset musl-release-metadata-blake3"
+      fields["[targets.aarch64-unknown-linux-musl]"] = "asset sha256 blake3 sigstore-bundle size"
+      fields["[targets.x86_64-unknown-linux-musl]"] = "asset sha256 blake3 sigstore-bundle size"
+      for (s in fields) {
+        n = split(fields[s], keys, " ")
+        for (i = 1; i <= n; i++) required[s SUBSEP keys[i]] = 1
+      }
+    }
+    /^$/ { next }
+    /^\[/ {
+      section = $0
+      if (!(section in fields) || sections[section]++) bad = 1
+      next
+    }
+    {
+      key = section SUBSEP $1
+      if ($2 != "=" || !(key in required) || seen[key]++) bad = 1
+      value = substr($0, index($0, "=") + 1)
+      sub(/^[[:space:]]+/, "", value)
+      if ($1 == "schema-version") { if (value != "1") bad = 1 }
+      else if ($1 == "size") { if (value !~ /^[1-9][0-9]*$/) bad = 1 }
+      else if (value !~ /^"[^"\\]*"$/) bad = 1
+    }
+    END {
+      for (key in required) if (seen[key] != 1) bad = 1
+      exit bad ? 1 : 0
+    }
+  ' "$musl_metadata" || { echo "invalid signed musl extension schema" >&2; return 1; }
+  [ "$(toml_value "$musl_metadata" "" kind)" = aos-release-musl-extension ] || return 1
+  [ "$(toml_value "$musl_metadata" "" repository)" = "$AOS_TRUSTED_RELEASE_REPO" ] || return 1
+  for musl_key in product version tag source-commit release-workflow-identity; do
+    [ "$(toml_value "$musl_metadata" "" "$musl_key")" = "$(toml_value "$legacy_metadata" "" "$musl_key")" ] || return 1
+  done
+  [ "$(toml_value "$musl_metadata" '[legacy-release]' metadata-asset)" = "$release_metadata_asset" ] || return 1
+  [ "$(toml_value "$musl_metadata" '[legacy-release]' metadata-sha256)" = "$(sha256_file "$legacy_metadata")" ] || {
+    echo "musl extension does not bind the authenticated release" >&2; return 1
+  }
+  for musl_key in repository version tag source-commit release-workflow-identity; do
+    [ "$(toml_value "$musl_metadata" '[runtime-musl]' "$musl_key")" = "$(toml_value "$legacy_metadata" '[runtime]' "$musl_key")" ] || return 1
+  done
+  [ "$(toml_value "$musl_metadata" '[runtime-musl]' legacy-release-metadata-asset)" = "$runtime_metadata_asset" ] || return 1
+  [ "$(toml_value "$musl_metadata" '[runtime-musl]' legacy-release-metadata-blake3)" = "$runtime_metadata_blake3" ] || return 1
+  [ "$(toml_value "$musl_metadata" '[runtime-musl]' musl-release-metadata-asset)" = "astrid-${runtime_version}-musl-release.toml" ] || return 1
+  printf '%s\n' "$(toml_value "$musl_metadata" '[runtime-musl]' musl-release-metadata-blake3)" | grep -Eq '^[0-9a-f]{64}$' || return 1
+  for musl_target in aarch64-unknown-linux-musl x86_64-unknown-linux-musl; do
+    musl_section="[targets.$musl_target]"
+    musl_asset="unicity-aos-${AOS_VERSION}-${musl_target}.tar.gz"
+    [ "$(toml_value "$musl_metadata" "$musl_section" asset)" = "$musl_asset" ] || return 1
+    [ "$(toml_value "$musl_metadata" "$musl_section" sigstore-bundle)" = "$musl_asset.sigstore.json" ] || return 1
+    for musl_digest in sha256 blake3; do
+      printf '%s\n' "$(toml_value "$musl_metadata" "$musl_section" "$musl_digest")" | grep -Eq '^[0-9a-f]{64}$' || return 1
+    done
+  done
+}
+
 os=$(uname -s)
 arch=$(uname -m)
+libc=gnu
+if [ "$os" = Linux ] && ldd --version 2>&1 | grep -qi musl; then
+  libc=musl
+fi
+runtime_binaries="astrid astrid-daemon astrid-build astrid-emit"
 case "$os:$arch" in
   Darwin:arm64|Darwin:aarch64)
     target=aarch64-apple-darwin
     cosign_asset=cosign-darwin-arm64
     cosign_sha256=94b42a9e697be95675f6160ab031a9a5f1ec1e646d6f648d7b2f5cd59ececbc5
+    runtime_binaries="$runtime_binaries astrid-storage-provider-fskit"
     ;;
   Darwin:x86_64)
     target=x86_64-apple-darwin
     cosign_asset=cosign-darwin-amd64
     cosign_sha256=14d2678dfbfde18798151e86fbd91ebdadbb7424b18412a42a155dd8a2df4c7a
+    runtime_binaries="$runtime_binaries astrid-storage-provider-fskit"
     ;;
   Linux:aarch64|Linux:arm64)
-    target=aarch64-unknown-linux-gnu
+    target=aarch64-unknown-linux-$libc
     cosign_asset=cosign-linux-arm64
     cosign_sha256=2ec865872e331c32fd12b08dae15332d3f92c0aa029219589684a4903ca85d11
     ;;
   Linux:x86_64|Linux:amd64)
-    target=x86_64-unknown-linux-gnu
+    target=x86_64-unknown-linux-$libc
     cosign_asset=cosign-linux-amd64
     cosign_sha256=ae1ecd212663f3693ad9edf8b1a183900c9a52d3155ba6e354237f9a0f6463fc
     ;;
@@ -695,12 +766,34 @@ if [ -n "$release_metadata_sha256" ] && [ "$(sha256_file "$work/$release_metadat
   exit 1
 fi
 validate_release_metadata "$work/$release_metadata_asset" "$AOS_VERSION" "$release_identity"
+target_metadata="$work/$release_metadata_asset"
+if [ "$libc" = musl ]; then
+  musl_metadata_asset="unicity-aos-${AOS_VERSION}-musl-release.toml"
+  curl --proto '=https' --tlsv1.2 -fsSL "$release_base/$musl_metadata_asset" -o "$work/$musl_metadata_asset"
+  curl --proto '=https' --tlsv1.2 -fsSL "$release_base/$musl_metadata_asset.sigstore.json" -o "$work/$musl_metadata_asset.sigstore.json"
+  "$COSIGN_BIN" verify-blob \
+    --bundle "$work/$musl_metadata_asset.sigstore.json" \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+    --certificate-identity "$release_identity" \
+    --use-signed-timestamps \
+    "$work/$musl_metadata_asset" >/dev/null
+  validate_musl_release_metadata "$work/$musl_metadata_asset" "$target_metadata"
+  target_metadata="$work/$musl_metadata_asset"
+fi
+
+# The signed runtime tuple is the authority for GNU runtime membership. Keep
+# the historical 0.10.4 four-binary set stable, and require the FUSE provider
+# only for the versioned 2026.9.0 runtime contract. Darwin's FSKit member is
+# selected above and remains independent of this Linux-only rule.
+if [ "$os" = Linux ] && [ "$runtime_version" = 2026.9.0 ]; then
+  runtime_binaries="$runtime_binaries astrid-storage-provider-fuse"
+fi
 
 target_section="[targets.${target}]"
-asset=$(toml_value "$work/$release_metadata_asset" "$target_section" asset)
-asset_sha256=$(toml_value "$work/$release_metadata_asset" "$target_section" sha256)
-asset_blake3=$(toml_value "$work/$release_metadata_asset" "$target_section" blake3)
-asset_bundle=$(toml_value "$work/$release_metadata_asset" "$target_section" sigstore-bundle)
+asset=$(toml_value "$target_metadata" "$target_section" asset)
+asset_sha256=$(toml_value "$target_metadata" "$target_section" sha256)
+asset_blake3=$(toml_value "$target_metadata" "$target_section" blake3)
+asset_bundle=$(toml_value "$target_metadata" "$target_section" sigstore-bundle)
 expected_asset="unicity-aos-${AOS_VERSION}-${target}.tar.gz"
 [ "$asset" = "$expected_asset" ] || { echo "release metadata selected a non-canonical target asset" >&2; exit 1; }
 [ "$asset_bundle" = "$asset.sigstore.json" ] || { echo "release metadata selected a non-canonical signature bundle" >&2; exit 1; }
@@ -725,12 +818,16 @@ if [ -f "$work/channel.toml" ]; then
     echo "signed channel source commit does not match immutable release metadata" >&2
     exit 1
   }
-  for key in asset sha256 blake3 sigstore-bundle size; do
-    [ "$(toml_value "$work/channel.toml" "$target_section" "$key")" = "$(toml_value "$work/$release_metadata_asset" "$target_section" "$key")" ] || {
-      echo "signed channel target does not match immutable release metadata: $key" >&2
-      exit 1
-    }
-  done
+  # The immutable musl extension binds the complete channel-selected release
+  # metadata by SHA-256. Legacy channels intentionally carry GNU/Darwin only.
+  if [ "$libc" != musl ]; then
+    for key in asset sha256 blake3 sigstore-bundle size; do
+      [ "$(toml_value "$work/channel.toml" "$target_section" "$key")" = "$(toml_value "$work/$release_metadata_asset" "$target_section" "$key")" ] || {
+        echo "signed channel target does not match immutable release metadata: $key" >&2
+        exit 1
+      }
+    done
+  fi
 fi
 
 echo "Downloading Unicity AOS $AOS_VERSION for $target..."
@@ -777,9 +874,169 @@ bundle_name=$(tar -tzf "$work/$asset" | awk 'NR == 1 { sub(/\/.*/, "", $0); prin
 bundle="$work/unpack/$bundle_name"
 [ -d "$bundle" ] || { echo "release archive has no Unicity AOS bundle" >&2; exit 1; }
 
-for file in bin/aos libexec/install.sh runtime/bin/astrid runtime/bin/astrid-daemon runtime/bin/astrid-build runtime/bin/astrid-emit release-manifest.json Distro.toml capsule-assets.txt; do
+for file in bin/aos libexec/install.sh release-manifest.json Distro.toml capsule-assets.txt; do
   [ -f "$bundle/$file" ] || { echo "release archive is missing $file" >&2; exit 1; }
 done
+for name in $runtime_binaries; do
+  file="runtime/bin/$name"
+  [ -f "$bundle/$file" ] || { echo "release archive is missing $file" >&2; exit 1; }
+done
+
+# Read the two optional signed-distro members from the schema-v2 release
+# inventory.  Keep this parser dependency-free: the installer is also used on
+# hosts that do not have Python or jq.  The archive manifest is JSON emitted by
+# package-release.sh; the small scanner still tracks quoted strings and nested
+# objects so a member name in another manifest field cannot opt into signing.
+release_inventory_entry() {
+  manifest=$1
+  wanted=$2
+  awk -v wanted="$wanted" '
+    function object_after(text, start,    open, i, c, depth, quoted, escaped) {
+      open = index(substr(text, start), "{")
+      if (!open) return ""
+      open += start - 1
+      depth = 1
+      quoted = 0
+      escaped = 0
+      for (i = open + 1; i <= length(text); i++) {
+        c = substr(text, i, 1)
+        if (quoted) {
+          if (escaped) escaped = 0
+          else if (c == "\\") escaped = 1
+          else if (c == "\"") quoted = 0
+          continue
+        }
+        if (c == "\"") quoted = 1
+        else if (c == "{") depth++
+        else if (c == "}") {
+          depth--
+          if (depth == 0) return substr(text, open + 1, i - open - 1)
+        }
+      }
+      return ""
+    }
+    {
+      if (NR == 1) all = $0
+      else all = all " " $0
+    }
+    END {
+      release_start = index(all, "\"release_files\"")
+      if (!release_start) {
+        print "missing|||"
+        exit
+      }
+      release_object = object_after(all, release_start + length("\"release_files\""))
+      if (release_object == "") {
+        print "invalid|||"
+        exit
+      }
+
+      marker = "\"" wanted "\""
+      search = release_object
+      found = 0
+      while ((position = index(search, marker)) != 0) {
+        tail = substr(search, position + length(marker))
+        if (tail ~ /^[[:space:]]*:/) {
+          found = 1
+          break
+        }
+        search = substr(search, position + length(marker))
+      }
+      if (!found) {
+        print "missing|||"
+        exit
+      }
+      sub(/^[[:space:]]*:[[:space:]]*/, "", tail)
+      if (substr(tail, 1, 1) != "{") {
+        print "invalid|||"
+        exit
+      }
+      record = object_after(tail, 1)
+      if (record == "") {
+        print "invalid|||"
+        exit
+      }
+      digest = ""
+      field = record
+      if (field ~ /"blake3"[[:space:]]*:[[:space:]]*"/) {
+        sub(/.*"blake3"[[:space:]]*:[[:space:]]*"/, "", field)
+        sub(/".*/, "", field)
+        digest = field
+      }
+      mode = ""
+      field = record
+      if (field ~ /"mode"[[:space:]]*:[[:space:]]*[0-9]+/) {
+        sub(/.*"mode"[[:space:]]*:[[:space:]]*/, "", field)
+        sub(/[^0-9].*/, "", field)
+        mode = field
+      }
+      print "found|" digest "|" mode "|"
+    }
+  ' "$manifest"
+}
+
+release_inventory_status() {
+  printf '%s' "$1" | awk -F '|' '{print $1}'
+}
+
+release_inventory_digest() {
+  printf '%s' "$1" | awk -F '|' '{print $2}'
+}
+
+release_inventory_mode() {
+  printf '%s' "$1" | awk -F '|' '{print $3}'
+}
+
+distro_toml_inventory=$(release_inventory_entry "$bundle/release-manifest.json" Distro.toml)
+distro_lock_inventory=$(release_inventory_entry "$bundle/release-manifest.json" Distro.lock)
+distro_sig_inventory=$(release_inventory_entry "$bundle/release-manifest.json" Distro.sig)
+distro_toml_inventory_status=$(release_inventory_status "$distro_toml_inventory")
+distro_lock_inventory_status=$(release_inventory_status "$distro_lock_inventory")
+distro_sig_inventory_status=$(release_inventory_status "$distro_sig_inventory")
+distro_archive_signed=0
+if [ "$distro_lock_inventory_status" != missing ] || [ "$distro_sig_inventory_status" != missing ]; then
+  distro_archive_signed=1
+fi
+if [ "$distro_archive_signed" -eq 1 ]; then
+  [ "$distro_toml_inventory_status" = found ] && \
+    [ "$distro_lock_inventory_status" = found ] && \
+    [ "$distro_sig_inventory_status" = found ] || {
+      echo "signed release inventory is missing a Distro member record" >&2
+      exit 1
+    }
+  for distro_member in Distro.toml Distro.lock Distro.sig; do
+    [ -f "$bundle/$distro_member" ] && [ ! -L "$bundle/$distro_member" ] || {
+      echo "signed release archive is missing a regular $distro_member" >&2
+      exit 1
+    }
+  done
+  command -v b3sum >/dev/null 2>&1 || {
+    echo "b3sum is required to verify signed Distro member inventory" >&2
+    exit 1
+  }
+  for distro_member in Distro.toml Distro.lock Distro.sig; do
+    case "$distro_member" in
+      Distro.toml) distro_inventory="$distro_toml_inventory" ;;
+      Distro.lock) distro_inventory="$distro_lock_inventory" ;;
+      Distro.sig) distro_inventory="$distro_sig_inventory" ;;
+    esac
+    distro_digest=$(release_inventory_digest "$distro_inventory")
+    distro_mode=$(release_inventory_mode "$distro_inventory")
+    printf '%s\n' "$distro_digest" | grep -Eq '^[0-9a-f]{64}$' || {
+      echo "signed release inventory has a malformed $distro_member digest" >&2
+      exit 1
+    }
+    [ "$distro_mode" = 384 ] || {
+      echo "signed release inventory has an invalid $distro_member mode" >&2
+      exit 1
+    }
+    actual_distro_digest=$(b3sum -- "$bundle/$distro_member" | awk '{print $1}')
+    [ "$actual_distro_digest" = "$distro_digest" ] || {
+      echo "signed release inventory digest mismatch: $distro_member" >&2
+      exit 1
+    }
+  done
+fi
 [ -d "$bundle/capsules" ] || { echo "release archive has no capsule directory" >&2; exit 1; }
 if ! awk '
   !/^aos-[a-z0-9-]+\.capsule$/ { invalid = 1 }
@@ -817,7 +1074,19 @@ fi
 release_dir="$AOS_HOME/releases/$staged_version"
 release_stage="$AOS_HOME/releases/.${staged_version}.new.$$"
 release_backup="$AOS_HOME/releases/.${staged_version}.rollback.$$"
-for managed in "$AOS_HOME" "$AOS_HOME/libexec" "$AOS_HOME/runtime" "$AOS_HOME/runtime/bin" "$AOS_HOME/releases" "$release_dir" "$release_dir/capsules" "$AOS_HOME/update" "$AOS_HOME/update/channels"; do
+for managed in \
+  "$AOS_HOME" \
+  "$AOS_HOME/libexec" \
+  "$AOS_HOME/runtime" \
+  "$AOS_HOME/runtime/bin" \
+  "$AOS_HOME/run" \
+  "$AOS_HOME/releases" \
+  "$release_dir" \
+  "$release_dir/runtime" \
+  "$release_dir/runtime/bin" \
+  "$release_dir/capsules" \
+  "$AOS_HOME/update" \
+  "$AOS_HOME/update/channels"; do
   [ ! -L "$managed" ] || { echo "refusing symlinked managed path: $managed" >&2; exit 1; }
 done
 if [ -e "$release_dir" ] && [ ! -d "$release_dir" ]; then
@@ -836,6 +1105,17 @@ if [ -L "$AOS_BIN_DIR/aos" ] || { [ -e "$AOS_BIN_DIR/aos" ] && [ ! -f "$AOS_BIN_
   echo "refusing non-regular install destination: $AOS_BIN_DIR/aos" >&2
   exit 1
 fi
+for name in $runtime_binaries; do
+  legacy="$AOS_HOME/runtime/bin/$name"
+  [ ! -L "$legacy" ] || {
+    echo "refusing symlinked legacy runtime executable: $legacy" >&2
+    exit 1
+  }
+  [ ! -e "$legacy" ] || [ -f "$legacy" ] || {
+    echo "refusing non-regular legacy runtime executable: $legacy" >&2
+    exit 1
+  }
+done
 
 if [ -x "$AOS_BIN_DIR/aos" ] && [ "$ASSUME_YES" -ne 1 ]; then
   answer=
@@ -853,8 +1133,8 @@ if [ -x "$AOS_BIN_DIR/aos" ]; then
   "$AOS_BIN_DIR/aos" stop >/dev/null 2>&1 || true
 fi
 
-mkdir -p "$AOS_BIN_DIR" "$AOS_HOME/libexec" "$AOS_HOME/runtime/bin" "$AOS_HOME/releases"
-chmod 700 "$AOS_HOME" "$AOS_HOME/libexec" "$AOS_HOME/runtime" "$AOS_HOME/runtime/bin" "$AOS_HOME/releases"
+mkdir -p "$AOS_BIN_DIR" "$AOS_HOME/libexec" "$AOS_HOME/runtime" "$AOS_HOME/run" "$AOS_HOME/releases"
+chmod 700 "$AOS_HOME" "$AOS_HOME/libexec" "$AOS_HOME/runtime" "$AOS_HOME/run" "$AOS_HOME/releases"
 if [ -n "$channel_root" ]; then
   mkdir -p "$channel_root/generations"
   chmod 700 "$AOS_HOME/update" "$AOS_HOME/update/channels" "$channel_root" "$channel_root/generations"
@@ -864,6 +1144,13 @@ if [ "$AOS_BIN_DIR" = "$AOS_HOME/bin" ]; then
 fi
 rollback="$work/rollback"
 mkdir "$rollback"
+for name in $runtime_binaries; do
+  legacy="$AOS_HOME/runtime/bin/$name"
+  if [ -f "$legacy" ]; then
+    cp -p "$legacy" "$rollback/$name"
+  fi
+  : > "$rollback/$name.touched"
+done
 
 install_one() {
   source=$1
@@ -936,7 +1223,7 @@ restore() {
   elif [ -f "$rollback/release.touched" ]; then
     rm -rf "$release_dir" || result=1
   fi
-  for name in aos installer astrid astrid-daemon astrid-build astrid-emit channel-current; do
+  for name in aos installer $runtime_binaries channel-current; do
     case "$name" in
       aos) destination="$AOS_BIN_DIR/aos" ;;
       installer) destination="$AOS_HOME/libexec/install.sh" ;;
@@ -962,15 +1249,25 @@ restore() {
 installation_started=1
 if ! install_one "$bundle/bin/aos" "$AOS_BIN_DIR/aos" aos 755; then exit 1; fi
 if ! install_one "$bundle/libexec/install.sh" "$AOS_HOME/libexec/install.sh" installer 600; then exit 1; fi
-for name in astrid astrid-daemon astrid-build astrid-emit; do
-  if ! install_one "$bundle/runtime/bin/$name" "$AOS_HOME/runtime/bin/$name" "$name" 755; then exit 1; fi
-done
 mkdir "$release_stage"
 chmod 700 "$release_stage"
-mkdir "$release_stage/capsules"
-chmod 700 "$release_stage/capsules"
+mkdir "$release_stage/runtime" "$release_stage/runtime/bin" "$release_stage/capsules"
+chmod 700 "$release_stage/runtime" "$release_stage/runtime/bin" "$release_stage/capsules"
+for name in $runtime_binaries; do
+  install -m 0700 "$bundle/runtime/bin/$name" "$release_stage/runtime/bin/$name"
+done
+if [ -d "$bundle/runtime/bin/AstridFS.app" ]; then
+  # The authenticated archive owns these signed bytes. Do not edit Info.plist,
+  # rename internal executables, or re-sign while installing the product.
+  cp -Rp "$bundle/runtime/bin/AstridFS.app" "$release_stage/runtime/bin/"
+  cp -Rp "$bundle/runtime/bin/macos" "$release_stage/runtime/bin/"
+fi
 install -m 0600 "$bundle/release-manifest.json" "$release_stage/release-manifest.json"
 install -m 0600 "$bundle/Distro.toml" "$release_stage/Distro.toml"
+if [ "$distro_archive_signed" -eq 1 ]; then
+  install -m 0600 "$bundle/Distro.lock" "$release_stage/Distro.lock"
+  install -m 0600 "$bundle/Distro.sig" "$release_stage/Distro.sig"
+fi
 install -m 0600 "$bundle/capsule-assets.txt" "$release_stage/capsule-assets.txt"
 while IFS= read -r capsule; do
   install -m 0600 "$bundle/capsules/$capsule" "$release_stage/capsules/$capsule"
@@ -984,9 +1281,34 @@ if ! mv "$release_stage" "$release_dir"; then
 fi
 release_committed=1
 stage_channel_receipt
+# Older installations may have copied the bundled executables into the mutable
+# runtime home. They are no longer a valid launch location; remove only those
+# known managed files after the new immutable release is committed.
+if [ -d "$AOS_HOME/runtime/bin" ] && [ ! -L "$AOS_HOME/runtime/bin" ]; then
+  for name in $runtime_binaries; do
+    legacy="$AOS_HOME/runtime/bin/$name"
+    [ ! -L "$legacy" ] || { echo "refusing symlinked legacy runtime executable: $legacy" >&2; exit 1; }
+    [ ! -e "$legacy" ] || [ -f "$legacy" ] || {
+      echo "refusing non-regular legacy runtime executable: $legacy" >&2
+      exit 1
+    }
+    rm -f "$legacy"
+  done
+fi
 installation_started=0
 rm -rf "$release_backup"
 release_install_lock
+
+if [ -d "$release_dir/runtime/bin/AstridFS.app" ]; then
+  filesystem_manager="$release_dir/runtime/bin/macos/aos-filesystem.sh"
+  if ! /bin/sh "$filesystem_manager" install || ! /bin/sh "$filesystem_manager" enable; then
+    echo "AOS runtime is installed; macOS filesystem setup is incomplete." >&2
+    echo "Allow the Astrid filesystem extension in macOS settings, then run:" >&2
+    echo "/bin/sh '$filesystem_manager' install" >&2
+    echo "/bin/sh '$filesystem_manager' enable" >&2
+    exit 1
+  fi
+fi
 
 echo "Installed Unicity AOS $staged_version."
 case ":$PATH:" in
