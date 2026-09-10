@@ -4,7 +4,7 @@ set -eu
 umask 077
 
 ORACLES_REPO="${AOS_ORACLES_REPO:-unicity-aos/oracles}"
-ORACLES_VERSION="${AOS_ORACLES_VERSION:-2026.9.0}"
+ORACLES_VERSION="${AOS_ORACLES_VERSION:-2026.9.1}"
 AOS_INSTALL_URL="${AOS_INSTALL_URL:-https://aos.unicity.ai/base-install.sh}"
 AOS_HOME_DIR="${AOS_HOME:-$HOME/.aos}"
 AOS_CHANNEL=""
@@ -206,7 +206,7 @@ Usage: install.sh [options]
   --host HOST       install claude, codex, or grok (repeatable)
   --all             install every supported host
   --yes, -y         non-interactive host-pack provisioning
-  --oracle-version V exact signed oracle pack version (default: 2026.9.0)
+  --oracle-version V exact signed oracle pack version (default: 2026.9.1)
   --aos-channel C   install/follow the AOS stable, dev, or nightly channel
   --aos-version V   install an exact AOS calendar-semver release
   --local-assets D  use locally built capsules and pack manifests for testing
@@ -878,7 +878,8 @@ load_capsule_record() {
     # diagnostic. Any other failure can mean unreadable or truncated state,
     # and must stop before workspace selection or default first-boot mutation.
     if [ "$cr_status" -eq 1 ] \
-      && grep -Fqx "capsule '$cr_capsule' is not installed for agent '$cr_principal'" "$cr_error"
+      && { [ "$(cat "$cr_error")" = "capsule '$cr_capsule' is not installed for agent '$cr_principal'" ] \
+        || [ "$(cat "$cr_error")" = "✗ capsule '$cr_capsule' is not installed for agent '$cr_principal'" ]; }
     then
       rm -f "$cr_error"
       return 1

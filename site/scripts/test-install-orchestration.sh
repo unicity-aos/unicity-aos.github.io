@@ -65,4 +65,24 @@ if grep -Fq -- '<--all>' "$log"; then
   exit 1
 fi
 
-echo "public installer composes base and host plugins without migration or init"
+# Exercise the real mirrored Oracle parser through the public wrapper, without
+# an environment version override. Help exits before downloads or host changes.
+# The fake base above tests ordering, not successful product installation.
+cat > "$work/oracle-default-probe.sh" <<'EOF'
+#!/bin/sh
+set -eu
+unset AOS_ORACLES_VERSION
+exec sh "$TEST_ORACLE_INSTALLER" --help "$@"
+EOF
+output=$(HOME="$home" AOS_HOME="$home/.aos" TEST_LOG="$log" \
+  TEST_ORACLE_INSTALLER="$root/public/oracle-install.sh" \
+  "$root/public/install.sh" \
+    --base-installer "$work/base-install.sh" \
+    --oracle-installer "$work/oracle-default-probe.sh" \
+    --host codex --yes)
+if ! grep -Fq 'default: 2026.9.1' <<<"$output"; then
+  echo "public wrapper selected a stale Oracle installer default" >&2
+  exit 1
+fi
+
+echo "public installer composes base and host plugins with the released Oracle default"
