@@ -54,6 +54,11 @@ const [
   ]);
 
 const copyButtons = start.match(/<button class="mono start-copy"[^>]*>/g) ?? [];
+const releaseVersion = (await read('src/lib/release.ts')).match(/version: '([0-9.]+)'/)?.[1];
+assert.ok(releaseVersion, 'release content needs a version');
+assert.ok(start.includes(`AOS ${releaseVersion}`), 'install page must display the release version');
+assert.ok(llms.includes(`Stable AOS release: ${releaseVersion}.`), 'agent content must match the release version');
+assert.ok(publicInstaller.includes('https://aos.unicity.ai/base-install.sh'), 'homepage wrapper must load the base installer');
 assert.equal(copyButtons.length, 2, 'expected stable and Homebrew controls');
 for (const button of copyButtons) {
   assert.doesNotMatch(button, / disabled(?:\s|>)/, 'published install methods must be enabled');

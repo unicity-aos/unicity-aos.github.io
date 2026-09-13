@@ -1,13 +1,13 @@
 const installer = 'curl -fsSL https://aos.unicity.ai/install.sh | sh';
 const channelAvailability = {
   stable: true,
-  dev: false,
+  dev: true,
   nightly: false,
 } as const;
 const homebrewAvailable = true;
 const oraclesAvailable = true;
 export const AOS_RELEASE = {
-  version: '2026.1.1',
+  version: '2026.9.2',
   status: 'released',
   available: channelAvailability.stable,
   defaultChannel: 'stable',
@@ -24,7 +24,7 @@ export const AOS_RELEASE = {
       label: 'Dev',
       available: channelAvailability.dev,
       command: `${installer} -s -- --channel dev`,
-      note: 'Explicit development channel. No development release is published yet.',
+      note: 'Explicit development channel. Resolves its own approved signed release.',
     },
     nightly: {
       label: 'Nightly',
