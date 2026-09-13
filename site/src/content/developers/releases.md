@@ -6,16 +6,16 @@ order: 90
 ---
 
 Unicity AOS versions independently from Astrid Runtime. Product releases use
-calendar SemVer: `2026.1.1` is the first stable 2026 release; compatible fixes
-advance the patch and compatible product features advance the minor.
+calendar SemVer in `YYYY.MINOR.PATCH` form. The 2026.9 series uses minor 9;
+compatible fixes advance the patch. Historical release identities are unchanged.
 
 ## Release identity
 
-The Git tag and product version are `2026.1.1` with no `v` prefix. Release
+The Git tag matches the product version, with no `v` prefix. Release
 archives use:
 
 ```text
-unicity-aos-<target>.tar.gz
+unicity-aos-<version>-<target>.tar.gz
 ```
 
 Each archive contains the product CLI and the exact runtime toolchain it wraps:
@@ -57,14 +57,16 @@ curl -fsSL https://aos.unicity.ai/install.sh | sh -s -- --channel dev
 curl -fsSL https://aos.unicity.ai/install.sh | sh -s -- --channel nightly
 ```
 
-Stable is live for `2026.1.1`. Dev and nightly remain closed until their signed
-channel pointers are published. The installer must resolve a selected channel to
+Stable and dev are published independently. See the [install page](/start/) for
+the current stable version. Nightly is usable only while its signed channel
+pointer is valid. The installer must resolve a selected channel to
 signed release metadata and an immutable tag. Missing, invalid, or mismatched
 channel metadata stops installation; it never falls back to another channel.
 
 ## Supported targets
 
-The initial artifact matrix contains four macOS/Linux targets. A target is
+The 2026.9.2 artifact matrix contains six targets: x86_64 and aarch64 for macOS,
+Linux GNU, and Linux musl. Windows is not shipped in this release. A target is
 supported only when the product CLI, daemon, IPC, installer, state paths, and
 end-to-end smoke tests pass on it. Cross-compiling a binary is not enough to
 claim support.
@@ -87,18 +89,24 @@ does not fetch capsule composition or runtime binaries from mutable `main`.
 
 1. Freeze and test the CE workspace lock.
 2. Build and verify every capsule artifact.
-3. Build the four product archives from the pinned runtime release.
+3. Build the six product archives from the pinned runtime release.
 4. Smoke-test clean install, reinstall/self-heal, upgrade, delegated commands,
    and uninstall or rollback behavior.
 5. Publish archives, capsules, `BLAKE3SUMS.txt`, `SHA256SUMS.txt`, Sigstore
-   bundles, and compatibility metadata under tag `2026.1.1`.
+   bundles, and compatibility metadata under the matching product tag.
 6. Test the canonical root `install.sh` against the published release.
 7. Dispatch and verify `brew install unicity-aos/tap/aos` from the release tap.
-8. Promote signed stable-channel metadata, then enable the website release switch
-   and installer copy actions.
+8. Promote dev, then stable through the protected channel workflow. Sync the
+   website's pinned base installer and release content to that stable source.
 9. Verify `curl -fsSL https://aos.unicity.ai/install.sh | sh` on every target.
 
 Website metadata, `aos --version`, archive tag, and documentation must agree.
+
+The homepage command runs the website's `install.sh` wrapper. That wrapper
+downloads `base-install.sh` (an exact mirror of the released AOS installer),
+installs AOS, then runs `oracle-install.sh` for the selected coding-host plugins.
+The wrapper does not pin the AOS package version: the signed stable channel
+selects it unless `--version` or `--channel` is supplied explicitly.
 
 ## Editions
 
