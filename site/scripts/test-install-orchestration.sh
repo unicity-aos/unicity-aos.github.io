@@ -80,7 +80,7 @@ output=$(HOME="$home" AOS_HOME="$home/.aos" TEST_LOG="$log" \
     --base-installer "$work/base-install.sh" \
     --oracle-installer "$work/oracle-default-probe.sh" \
     --host codex --yes)
-if ! grep -Fq 'default: 2026.9.1' <<<"$output"; then
+if ! grep -Fq 'default: latest published' <<<"$output"; then
   echo "public wrapper selected a stale Oracle installer default" >&2
   exit 1
 fi

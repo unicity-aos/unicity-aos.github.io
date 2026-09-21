@@ -4,7 +4,7 @@ set -eu
 umask 077
 
 ORACLES_REPO="${AOS_ORACLES_REPO:-unicity-aos/oracles}"
-ORACLES_VERSION="${AOS_ORACLES_VERSION:-2026.9.1}"
+ORACLES_VERSION="${AOS_ORACLES_VERSION:-latest}"
 AOS_INSTALL_URL="${AOS_INSTALL_URL:-https://aos.unicity.ai/base-install.sh}"
 AOS_HOME_DIR="${AOS_HOME:-$HOME/.aos}"
 AOS_CHANNEL=""
@@ -30,6 +30,7 @@ LOCK_BACKEND=""
 PLUGIN_STAGE=""
 RECEIPT_STAGE=""
 PREVIOUS_BINDINGS=""
+PREVIOUS_PACK=""
 CURRENT_PACK_BINDINGS=""
 INSTALL_TRANSACTION_ACTIVE=0
 AOS_HOME_EXISTED=0
@@ -206,7 +207,7 @@ Usage: install.sh [options]
   --host HOST       install claude, codex, or grok (repeatable)
   --all             install every supported host
   --yes, -y         non-interactive host-pack provisioning
-  --oracle-version V exact signed oracle pack version (default: 2026.9.1)
+  --oracle-version V exact signed oracle pack version (default: latest published)
   --aos-channel C   install/follow the AOS stable, dev, or nightly channel
   --aos-version V   install an exact AOS calendar-semver release
   --local-assets D  use locally built capsules and pack manifests for testing
@@ -235,6 +236,7 @@ while [ "$#" -gt 0 ]; do
     --oracle-version)
       shift
       ORACLES_VERSION="${1:-}"
+      [ -n "$ORACLES_VERSION" ] || die "--oracle-version requires a version"
       ;;
     --aos-channel)
       shift
@@ -265,6 +267,25 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
+printf '%s\n' "$ORACLES_REPO" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*$' \
+  || die "invalid Oracle repository '$ORACLES_REPO'"
+if [ -z "$LOCAL_ASSETS" ]; then
+  have curl || die "curl is required to download Oracle releases"
+fi
+if [ "$ORACLES_VERSION" = latest ]; then
+  [ -z "$LOCAL_ASSETS" ] || die "local assets require an explicit --oracle-version"
+  # Resolve once without the rate-limited GitHub API, then verify all artifacts
+  # against that exact release tag's Sigstore identity below.
+  release_url=$(curl --proto '=https' --proto-redir '=https' --tlsv1.2 \
+    -fsSL --max-time 30 -o /dev/null -w '%{url_effective}' \
+    "https://github.com/$ORACLES_REPO/releases/latest") \
+    || die "could not resolve the latest published Oracle release"
+  prefix="https://github.com/$ORACLES_REPO/releases/tag/v"
+  case "$release_url" in
+    "$prefix"*) ORACLES_VERSION=${release_url#"$prefix"} ;;
+    *) die "latest Oracle release redirected outside the expected repository" ;;
+  esac
+fi
 printf '%s\n' "$ORACLES_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
   || die "invalid oracle version '$ORACLES_VERSION'"
 [ -z "$AOS_CHANNEL" ] || [ -z "$AOS_VERSION" ] \
@@ -286,7 +307,7 @@ fi
 require_commands() {
   missing=""
   for command in \
-    awk basename cat chmod cp diff find grep ln mkdir mktemp mv pwd rm sed sort tar tr uniq uname
+    awk basename cat chmod cp diff find grep ln mkdir mktemp mv pwd python3 rm sed sort tar tr uniq uname
   do
     have "$command" || missing="$missing $command"
   done
@@ -511,8 +532,52 @@ calendar_version_at_least() {
   }'
 }
 
+runtime_toml_value() {
+  rt_file=$1
+  rt_key=$2
+  awk -F ' = ' -v key="$rt_key" '
+    /^\[runtime\]$/ { inside = 1; next }
+    /^\[/ { inside = 0 }
+    inside && $1 == key {
+      value = $2
+      gsub(/"/, "", value)
+      print value
+    }
+  ' "$rt_file"
+}
+
+validate_runtime_compatibility_document() {
+  rt_path=$1
+  [ -f "$rt_path" ] && [ ! -L "$rt_path" ] \
+    || die "runtime compatibility document is missing"
+  rt_repository=$(runtime_toml_value "$rt_path" repository)
+  rt_version=$(runtime_toml_value "$rt_path" version)
+  rt_tag=$(runtime_toml_value "$rt_path" tag)
+  rt_requirement=$(runtime_toml_value "$rt_path" version-requirement)
+  rt_identity=$(runtime_toml_value "$rt_path" release-workflow-identity)
+  rt_ready=$(runtime_toml_value "$rt_path" release-ready)
+  printf '%s\n' "$rt_version" \
+    | grep -Eq '^20[0-9][0-9]\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' \
+    || die "signed runtime compatibility document has an invalid Astrid floor"
+  [ "$rt_repository" = "astrid-runtime/astrid" ] \
+    || die "signed runtime compatibility document has an invalid runtime repository"
+  [ "$rt_tag" = "v$rt_version" ] \
+    || die "signed runtime compatibility document tag does not match its Astrid floor"
+  [ "$rt_identity" = "https://github.com/astrid-runtime/astrid/.github/workflows/release.yml@refs/tags/v$rt_version" ] \
+    || die "signed runtime compatibility document identity does not match its Astrid floor"
+  [ "$rt_ready" = "true" ] \
+    || die "signed runtime compatibility document is not release-ready"
+  # Authenticated documents may be a published minimum or a historical exact
+  # pin. The requirement floor must equal this document's version; new Oracle
+  # publishes remain gated to >= by the release workflow.
+  [ "$rt_requirement" = ">=$rt_version" ] \
+    || [ "$rt_requirement" = "=$rt_version" ] \
+    || die "signed runtime compatibility document requirement does not match its Astrid floor"
+}
+
 ensure_aos() {
-  if [ -x "$AOS_HOME_DIR/bin/aos" ] && [ -z "$AOS_CHANNEL" ] && [ -z "$AOS_VERSION" ]; then
+  if [ "$NO_INSTALL_AOS" -eq 1 ] && [ -x "$AOS_HOME_DIR/bin/aos" ] \
+    && [ -z "$AOS_CHANNEL" ] && [ -z "$AOS_VERSION" ]; then
     PATH="$AOS_HOME_DIR/bin:$PATH"
     export PATH
     return 0
@@ -772,8 +837,13 @@ capsules_for() {
 aos_capsules_for() {
   case "$1" in
     claude|codex|grok)
+      printf '%s\n' 'aos-mcp required'
+      # Published 2026.9.1 predates the hook adapter dependency. Keep its
+      # authenticated pack contract intact; newer packs must include it.
+      if [ "$ORACLES_VERSION" != 2026.9.1 ]; then
+        printf '%s\n' 'aos-hook-adapter-oracle required'
+      fi
       printf '%s\n' \
-        'aos-mcp required' \
         'aos-skills required' \
         'aos-forge if-present'
       ;;
@@ -874,12 +944,15 @@ load_capsule_record() {
   cr_record=$(aos --principal default capsule show "$cr_capsule" \
     --agent "$cr_principal" --format toml 2>"$cr_error") || cr_status=$?
   if [ "$cr_status" -ne 0 ]; then
+    # Keep unknown diagnostics fatal, but do not mistake a cached update notice
+    # accompanying the exact absent-capsule error for a transport failure.
+    cr_diagnostic=$(sed '/^! Update available: v[0-9][0-9.]* → v[0-9][0-9.]*\. Run `astrid update` to upgrade\.$/d' "$cr_error")
     # AOS marks an absent capsule with status 1 and this documented
     # diagnostic. Any other failure can mean unreadable or truncated state,
     # and must stop before workspace selection or default first-boot mutation.
     if [ "$cr_status" -eq 1 ] \
-      && { [ "$(cat "$cr_error")" = "capsule '$cr_capsule' is not installed for agent '$cr_principal'" ] \
-        || [ "$(cat "$cr_error")" = "✗ capsule '$cr_capsule' is not installed for agent '$cr_principal'" ]; }
+      && { [ "$cr_diagnostic" = "capsule '$cr_capsule' is not installed for agent '$cr_principal'" ] \
+        || [ "$cr_diagnostic" = "✗ capsule '$cr_capsule' is not installed for agent '$cr_principal'" ]; }
     then
       rm -f "$cr_error"
       return 1
@@ -923,6 +996,53 @@ append_binding() {
     return 0
   fi
   printf '%s %s\n' "$ab_name" "$ab_hash" >> "$ab_file"
+}
+
+
+previous_pack_declares_aos_capsule() {
+  pp_name=$1
+  [ -n "${PREVIOUS_PACK:-}" ] && [ -f "$PREVIOUS_PACK" ] || return 1
+  pack_aos_capsules_tsv "$PREVIOUS_PACK" | awk -v wanted="$pp_name" '
+    $1 == wanted { found = 1 }
+    END { exit !found }
+  '
+}
+
+# Local installed-release identity only: the named capsule's wasm hash matches
+# a previous Unicity CE release artifact path already present in this home.
+# This does not verify that older Distro's signature.
+aos_identity_matches_previous_local_distro_artifact() {
+  pd_name=$1
+  pd_hash=$2
+  previous_pack_declares_aos_capsule "$pd_name" || return 1
+  for pd_manifest in "$AOS_HOME_DIR"/releases/*/Distro.toml; do
+    [ -f "$pd_manifest" ] && [ ! -L "$pd_manifest" ] || continue
+    grep -Fqx 'id = "unicity-ce"' "$pd_manifest" || continue
+    pd_release=${pd_manifest%/Distro.toml}
+    [ -d "$pd_release" ] && [ ! -L "$pd_release" ] || continue
+    pd_version=${pd_release##*/}
+    printf '%s\n' "$pd_version" \
+      | grep -Eq '^20[0-9][0-9]\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' || continue
+    grep -Fqx "version = \"$pd_version\"" "$pd_manifest" || continue
+    aos_release_has_capsule "$pd_name" "$pd_release" || continue
+    pd_artifact="$pd_release/capsules/$pd_name.capsule"
+    [ -f "$pd_artifact" ] && [ ! -L "$pd_artifact" ] || continue
+    pd_release_hash=$(release_capsule_wasm_blake3 "$pd_artifact" "$pd_name")
+    [ "$pd_hash" = "$pd_release_hash" ] && return 0
+  done
+  return 1
+}
+
+aos_identity_matches_release_or_managed() {
+  ai_name=$1
+  ai_hash=$2
+  ai_release_hash=$3
+  [ "$ai_hash" = "$ai_release_hash" ] && return 0
+  if [ -n "${PREVIOUS_BINDINGS:-}" ] && [ -f "$PREVIOUS_BINDINGS" ]; then
+    ai_previous=$(binding_hash "$PREVIOUS_BINDINGS" "$ai_name" 2>/dev/null || true)
+    [ -n "$ai_previous" ] && [ "$ai_hash" = "$ai_previous" ] && return 0
+  fi
+  aos_identity_matches_previous_local_distro_artifact "$ai_name" "$ai_hash"
 }
 
 legacy_v020_hash() {
@@ -991,8 +1111,10 @@ load_previous_bindings() {
   lp_pack="$lp_root/Pack.lock"
   lp_receipt="$lp_root/current/Receipt.toml"
   PREVIOUS_BINDINGS="$WORK/previous-$lp_host.bindings"
+  PREVIOUS_PACK=""
   : > "$PREVIOUS_BINDINGS"
   [ -r "$lp_pack" ] || return 0
+  PREVIOUS_PACK="$lp_pack"
   [ -r "$lp_receipt" ] || die "installed $lp_host Oracle pack has no receipt"
   grep -Fqx "host = \"$lp_host\"" "$lp_pack" \
     || die "installed $lp_host Oracle pack has the wrong host"
@@ -1159,6 +1281,7 @@ stage_release_metadata() {
   validate_checksum_manifest "$RELEASE_STAGE/BLAKE3SUMS.txt"
   verify_blake3 "$RELEASE_STAGE/aos-oracle-plugins.tar.gz" aos-oracle-plugins.tar.gz
   verify_blake3 "$RELEASE_STAGE/runtime-compatibility.toml" runtime-compatibility.toml
+  validate_runtime_compatibility_document "$RELEASE_STAGE/runtime-compatibility.toml"
   PLUGIN_BLAKE3=$(expected_blake3 aos-oracle-plugins.tar.gz)
   validate_plugin_archive "$RELEASE_STAGE/aos-oracle-plugins.tar.gz"
 }
@@ -1186,6 +1309,15 @@ prepare_plugin_snapshot() {
       || die "plugin snapshot is missing a regular $required"
   done
   PLUGIN_SNAPSHOT="$stage"
+  # Bind installation-local configuration before exact snapshot comparison, so
+  # repeat installs compare the same configured bytes instead of the template.
+  configure_mcp="$stage/plugins/unicity-aos/bin/aos-configure-mcp"
+  if [ -f "$configure_mcp" ]; then
+    python3 "$configure_mcp" \
+      --installed-root "$AOS_HOME_DIR/extensions/oracles/plugins/$ORACLES_VERSION/plugins/unicity-aos"
+  elif [ "$ORACLES_VERSION" != 2026.9.1 ]; then
+    die "plugin snapshot is missing aos-configure-mcp"
+  fi
 }
 
 capture_receipt_rollback_state() {
@@ -1349,9 +1481,10 @@ resolve_aos_capsules() {
   repair_runtime_workspace_selection
 
   # Preflight every existing identity before AOS can apply a distribution.
-  # A foreign source, malformed hash, or default/host disagreement is a reason
-  # to stop before init; it is not a state for the installer to reconcile by
-  # mutation.
+  # A foreign source, malformed hash, or unmanaged default/host disagreement
+  # stops before init. A host hash that exactly matches a prior managed
+  # identity may later be moved onto this signed distro; that is not a
+  # reason to treat unknown same-ID bytes as operator state.
   while read -r rac_name rac_availability rac_extra; do
     [ -n "$rac_name" ] || continue
     [ -z "${rac_extra:-}" ] || die "invalid AOS capsule dependency record"
@@ -1365,7 +1498,8 @@ resolve_aos_capsules() {
         || die "AOS capsule dependency '$rac_name' for $rac_principal has no registry source"
       printf '%s\n' "$CAPSULE_HASH" | grep -Eq '^[0-9a-f]{64}$' \
         || die "AOS capsule dependency '$rac_name' for $rac_principal has an invalid identity hash"
-      [ "$CAPSULE_HASH" = "$rac_release_hash" ] \
+      aos_identity_matches_release_or_managed \
+        "$rac_name" "$CAPSULE_HASH" "$rac_release_hash" \
         || die "AOS capsule dependency '$rac_name' for $rac_principal differs from the signed operator distribution"
       rac_host_hash=$CAPSULE_HASH
     elif [ "$CAPSULE_RECORD_FOUND" -eq 1 ]; then
@@ -1380,8 +1514,15 @@ resolve_aos_capsules() {
         || die "default AOS capsule dependency '$rac_name' differs from the signed operator distribution"
       rac_default_hash=$CAPSULE_HASH
       if load_capsule_record "$rac_principal" "$rac_name"; then
-        [ "$CAPSULE_HASH" = "$rac_default_hash" ] \
-          || die "default and host identities disagree for AOS capsule '$rac_name'"
+        if [ "$CAPSULE_HASH" != "$rac_default_hash" ]; then
+          # Default already matches this signed distro; a prior managed host
+          # copy is upgraded after the principal exists. Any other split is
+          # still a foreign same-ID disagreement.
+          [ "$rac_default_hash" = "$rac_release_hash" ] \
+            && aos_identity_matches_release_or_managed \
+              "$rac_name" "$CAPSULE_HASH" "$rac_release_hash" \
+            || die "default and host identities disagree for AOS capsule '$rac_name'"
+        fi
       fi
     elif [ "$CAPSULE_RECORD_FOUND" -eq 1 ]; then
       die "default AOS capsule dependency '$rac_name' has a malformed identity"
@@ -1447,8 +1588,12 @@ resolve_aos_capsules() {
     printf '%s\n' "$rac_name" >> "$RESOLVED_AOS_CAPSULES"
     if load_capsule_record "$rac_principal" "$rac_name"; then
       [ -n "$CAPSULE_SOURCE" ] \
-        && [ "$CAPSULE_HASH" = "$rac_hash" ] \
         || die "AOS capsule dependency '$rac_name' for $rac_principal differs from the signed operator distribution"
+      if [ "$CAPSULE_HASH" != "$rac_hash" ]; then
+        aos_identity_matches_release_or_managed \
+          "$rac_name" "$CAPSULE_HASH" "$rac_hash" \
+          || die "AOS capsule dependency '$rac_name' for $rac_principal differs from the signed operator distribution"
+      fi
     fi
   done < "$CURRENT_AOS_CAPSULES"
 }
@@ -1479,6 +1624,50 @@ stage_pack() {
   STAGED_PACK=$stage
 }
 
+
+reconcile_managed_aos_capsules() {
+  rma_principal=$1
+  rma_release="$AOS_HOME_DIR/releases/$ACTIVE_AOS_VERSION"
+  [ -d "$rma_release" ] && [ ! -L "$rma_release" ] \
+    || die "installed Unicity AOS $ACTIVE_AOS_VERSION has no trusted release directory"
+  while read -r rma_name rma_hash rma_extra; do
+    [ -n "$rma_name" ] || continue
+    [ -z "${rma_extra:-}" ] || die "invalid resolved AOS capsule identity"
+    printf '%s\n' "$rma_hash" | grep -Eq '^[0-9a-f]{64}$' \
+      || die "signed AOS distribution has no trusted identity for '$rma_name'"
+    if ! load_capsule_record "$rma_principal" "$rma_name"; then
+      if [ "$CAPSULE_RECORD_FOUND" -eq 1 ]; then
+        die "AOS capsule dependency '$rma_name' for $rma_principal has a malformed identity"
+      fi
+      continue
+    fi
+    [ -n "$CAPSULE_SOURCE" ] \
+      || die "AOS capsule dependency '$rma_name' for $rma_principal has no registry source"
+    [ "$CAPSULE_HASH" = "$rma_hash" ] && continue
+    aos_identity_matches_release_or_managed "$rma_name" "$CAPSULE_HASH" "$rma_hash" \
+      || die "AOS capsule dependency '$rma_name' for $rma_principal differs from the signed operator distribution"
+    rma_artifact="$rma_release/capsules/$rma_name.capsule"
+    [ -f "$rma_artifact" ] && [ ! -L "$rma_artifact" ] \
+      || die "signed AOS distribution has no trusted capsule '$rma_name'"
+    rma_release_hash=$(release_capsule_wasm_blake3 "$rma_artifact" "$rma_name")
+    [ "$rma_release_hash" = "$rma_hash" ] \
+      || die "signed AOS distribution capsule '$rma_name' does not resolve to the active release"
+    say "Updating managed AOS capsule '$rma_name' for $rma_principal to the signed operator distribution..."
+    if [ "$ASSUME_YES" -eq 1 ]; then
+      aos --principal "$rma_principal" distro apply --yes --capsule "$rma_name" </dev/null
+    elif [ -r /dev/tty ]; then
+      aos --principal "$rma_principal" distro apply --yes --capsule "$rma_name" </dev/tty
+    else
+      aos --principal "$rma_principal" distro apply --yes --capsule "$rma_name"
+    fi
+    load_capsule_record "$rma_principal" "$rma_name" \
+      || die "updated AOS capsule '$rma_name' has no readable identity for $rma_principal"
+    [ -n "$CAPSULE_SOURCE" ] \
+      && [ "$CAPSULE_HASH" = "$rma_hash" ] \
+      || die "updated AOS capsule '$rma_name' for $rma_principal does not match the signed operator distribution"
+  done < "$RESOLVED_AOS_IDENTITIES"
+}
+
 install_pack() {
   host=$1
   principal=$(principal_for "$host")
@@ -1491,6 +1680,7 @@ install_pack() {
   : > "$OBSOLETE_BINDINGS"
   resolve_aos_capsules "$principal"
   ensure_principal "$host" "$principal"
+  reconcile_managed_aos_capsules "$principal"
 
   for capsule in $(capsules_for "$host"); do
     expected_hash=$(binding_hash "$CURRENT_PACK_BINDINGS" "$capsule") \

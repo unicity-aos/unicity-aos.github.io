@@ -9,7 +9,7 @@ permissions:
 
 env:
   AOS_INSTALLER_SOURCE_COMMIT: f6f22024fb1e8d122f28a1b4a9f75aee448ae839
-  ORACLE_INSTALLER_SOURCE_COMMIT: ce87c71560f83458c3328b55f3a88af7d4b591d1
+  ORACLE_INSTALLER_SOURCE_COMMIT: 60c69f0bf6e05fb8b41520716d05c00bd5bb8495
 
 concurrency:
   group: website-ci-${{ github.event.pull_request.number }}
@@ -61,6 +61,7 @@ jobs:
           sh -n unicity-aos-web/site/public/oracle-install.sh
           cmp aos-ce/install.sh unicity-aos-web/site/public/base-install.sh
           cmp oracles/install.sh unicity-aos-web/site/public/oracle-install.sh
+          python3 unicity-aos-web/site/scripts/test-oracle-latest.py
 
       - name: Install dependencies
         working-directory: unicity-aos-web/site
