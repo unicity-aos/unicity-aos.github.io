@@ -10,7 +10,7 @@ permissions:
 
 env:
   AOS_INSTALLER_SOURCE_COMMIT: f6f22024fb1e8d122f28a1b4a9f75aee448ae839
-  ORACLE_INSTALLER_SOURCE_COMMIT: ce87c71560f83458c3328b55f3a88af7d4b591d1
+  ORACLE_INSTALLER_SOURCE_COMMIT: 3430c96c71c9b3dfd59cbdd91616ecb282d7fe3e
 
 concurrency:
   group: pages
@@ -46,6 +46,7 @@ jobs:
           sh -n oracles/install.sh
           cmp aos-ce/install.sh unicity-aos-web/site/public/base-install.sh
           cmp oracles/install.sh unicity-aos-web/site/public/oracle-install.sh
+          python3 unicity-aos-web/site/scripts/test-oracle-latest.py
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
