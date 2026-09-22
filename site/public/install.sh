@@ -155,10 +155,9 @@ wait "$filter_pid"
 PATH="${AOS_BIN_DIR:-${AOS_HOME:-$HOME/.aos}/bin}:$PATH"
 export PATH
 
-set -- "$oracle_installer" --no-install-aos
-if [ "$PROVISION_ORACLES" -eq 0 ]; then
-  set -- "$oracle_installer" --plugins-only --no-install-aos
-fi
+set -- "$oracle_installer"
+[ "$PROVISION_ORACLES" -ne 0 ] || set -- "$@" --plugins-only
+set -- "$@" --no-install-aos
 [ -z "$ORACLE_RESULT" ] || set -- "$@" --result-file "$ORACLE_RESULT"
 for host in $HOSTS; do
   set -- "$@" --host "$host"
