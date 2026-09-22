@@ -51,6 +51,15 @@ if grep -Fq 'aos init' <<<"$output"; then
 fi
 test ! -e "$home/.astrid"
 
+# Eager provisioning delegates the same selected hosts to Oracle's full path.
+HOME="$home" AOS_HOME="$home/.aos" TEST_LOG="$log" TEST_ASSETS="$assets" \
+  "$root/public/install.sh" \
+    --base-installer "$work/base-install.sh" \
+    --oracle-installer "$work/oracle-install.sh" \
+    --oracle-assets "$assets" --provision-oracles --oracle-result "$work/result.json" \
+    --host codex --host claude --yes >/dev/null
+grep -Fq "oracle <--no-install-aos> <--result-file> <$work/result.json> <--host> <codex> <--host> <claude> <--yes>" "$log"
+
 : > "$log"
 HOME="$home" AOS_HOME="$home/.aos" TEST_LOG="$log" TEST_ASSETS="$assets" \
   "$root/public/install.sh" \
