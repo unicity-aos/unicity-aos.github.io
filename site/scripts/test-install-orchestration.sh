@@ -51,6 +51,15 @@ if grep -Fq 'aos init' <<<"$output"; then
 fi
 test ! -e "$home/.astrid"
 
+# Eager provisioning delegates the same selected hosts to Oracle's full path.
+HOME="$home" AOS_HOME="$home/.aos" TEST_LOG="$log" TEST_ASSETS="$assets" \
+  "$root/public/install.sh" \
+    --base-installer "$work/base-install.sh" \
+    --oracle-installer "$work/oracle-install.sh" \
+    --oracle-assets "$assets" --provision-oracles --oracle-result "$work/result.json" \
+    --host codex --host claude --yes >/dev/null
+grep -Fq "oracle <--no-install-aos> <--result-file> <$work/result.json> <--host> <codex> <--host> <claude> <--yes>" "$log"
+
 : > "$log"
 HOME="$home" AOS_HOME="$home/.aos" TEST_LOG="$log" TEST_ASSETS="$assets" \
   "$root/public/install.sh" \
@@ -86,3 +95,22 @@ if ! grep -Fq 'default: latest published' <<<"$output"; then
 fi
 
 echo "public installer composes base and host plugins with the released Oracle default"
+
+# Invalid handoff destinations must fail before the base installer runs.
+printf 'preserve-existing-result\n' > "$work/existing-result.json"
+ln -s "$work/missing-result-target" "$work/symlink-result.json"
+for rejected_result in relative.json "$work/existing-result.json" "$work/symlink-result.json"; do
+  : > "$log"
+  if HOME="$home" AOS_HOME="$home/.aos" TEST_LOG="$log" TEST_ASSETS="$assets" \
+    "$root/public/install.sh" --base-installer "$work/base-install.sh" \
+      --oracle-installer "$work/oracle-install.sh" --provision-oracles \
+      --oracle-result "$rejected_result" --host codex --yes \
+      >"$work/rejected-result.log" 2>&1; then
+    echo "invalid Oracle result destination accepted" >&2
+    exit 1
+  fi
+  test ! -s "$log"
+done
+grep -Fxq 'preserve-existing-result' "$work/existing-result.json"
+test -L "$work/symlink-result.json"
+test ! -e "$work/missing-result-target"

@@ -8,6 +8,8 @@ ORACLE_INSTALLER_SOURCE="${AOS_ORACLE_INSTALLER:-https://aos.unicity.ai/oracle-i
 ORACLE_ASSETS="${AOS_ORACLE_ASSETS:-}"
 ASSUME_YES=0
 ALL_HOSTS=0
+PROVISION_ORACLES=0
+ORACLE_RESULT=
 HOSTS=""
 AOS_CHANNEL=""
 AOS_VERSION=""
@@ -30,6 +32,8 @@ Usage: install.sh [options]
   --host HOST            install claude, codex, or grok (repeatable)
   --all                  install every detected supported host
   --yes, -y              select every detected host without prompting
+  --provision-oracles    finish host principal provisioning now, not on first launch
+  --oracle-result FILE  write provisioned host/principal JSON to a new file
   --channel CHANNEL      install AOS from stable, dev, or nightly
   --version VERSION      install an exact AOS release
   --base-installer SRC   use a local path or HTTPS URL for the AOS installer
@@ -49,6 +53,12 @@ while [ "$#" -gt 0 ]; do
       esac
       ;;
     --all) ALL_HOSTS=1 ;;
+    --provision-oracles) PROVISION_ORACLES=1 ;;
+    --oracle-result)
+      shift
+      ORACLE_RESULT=${1:-}
+      [ -n "$ORACLE_RESULT" ] || die "--oracle-result requires a path"
+      ;;
     -y|--yes) ASSUME_YES=1 ;;
     --channel)
       shift
@@ -88,6 +98,13 @@ done
 
 [ -z "$AOS_CHANNEL" ] || [ -z "$AOS_VERSION" ] \
   || die "--channel and --version are mutually exclusive"
+[ -z "$ORACLE_RESULT" ] || [ "$PROVISION_ORACLES" -eq 1 ] \
+  || die "--oracle-result requires --provision-oracles"
+if [ -n "$ORACLE_RESULT" ]; then
+  case "$ORACLE_RESULT" in /*) ;; *) die "--oracle-result requires an absolute path" ;; esac
+  [ ! -e "$ORACLE_RESULT" ] && [ ! -L "$ORACLE_RESULT" ] \
+    || die "--oracle-result must name a new file"
+fi
 
 fetch_installer() {
   source=$1
@@ -135,8 +152,13 @@ status=0
 sh "$@" >"$base_output" || status=$?
 wait "$filter_pid"
 [ "$status" -eq 0 ] || exit "$status"
+PATH="${AOS_BIN_DIR:-${AOS_HOME:-$HOME/.aos}/bin}:$PATH"
+export PATH
 
-set -- "$oracle_installer" --plugins-only --no-install-aos
+set -- "$oracle_installer"
+[ "$PROVISION_ORACLES" -ne 0 ] || set -- "$@" --plugins-only
+set -- "$@" --no-install-aos
+[ -z "$ORACLE_RESULT" ] || set -- "$@" --result-file "$ORACLE_RESULT"
 for host in $HOSTS; do
   set -- "$@" --host "$host"
 done
@@ -151,4 +173,8 @@ else
   sh "$@"
 fi
 
-say "Unicity AOS is installed. Start a new selected host session to finish plugin provisioning."
+if [ "$PROVISION_ORACLES" -eq 1 ]; then
+  say "Unicity AOS and the selected Oracle principals are provisioned."
+else
+  say "Unicity AOS is installed. Start a new selected host session to finish plugin provisioning."
+fi
