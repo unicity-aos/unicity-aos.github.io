@@ -12,6 +12,7 @@ AOS_VERSION="$AOS_VERSION_INPUT"
 AOS_CHANNEL_BASE_URL="${AOS_CHANNEL_BASE_URL:-https://github.com/${AOS_RELEASE_REPO}/releases/download}"
 COSIGN_VERSION=v3.1.1
 ASSUME_YES=0
+CHECK_ONLY=0
 SKIP_MIGRATION_PROMPT=0
 channel_explicit=0
 version_explicit=0
@@ -36,9 +37,10 @@ usage() {
   cat <<'EOF'
 Install or upgrade Unicity AOS Community Edition.
 
-Usage: install.sh [--yes] [--channel CHANNEL | --version VERSION] [--no-migrate-prompt]
+Usage: install.sh [--check] [--yes] [--channel CHANNEL | --version VERSION] [--no-migrate-prompt]
 
   --yes                do not ask before replacing an existing installation
+  --check              report signed channel availability without installing
   --channel CHANNEL    follow the signed stable, dev, or nightly channel
   --version VERSION    install a specific calendar-semver release
   --no-migrate-prompt  do not launch the optional Astrid state-import prompt
@@ -48,6 +50,7 @@ EOF
 while [ "$#" -gt 0 ]; do
   case "$1" in
     -y|--yes) ASSUME_YES=1 ;;
+    --check) CHECK_ONLY=1 ;;
     --channel)
       [ "$#" -ge 2 ] || { echo "missing value for --channel" >&2; exit 2; }
       AOS_CHANNEL=$2
@@ -69,6 +72,10 @@ done
 
 if [ "$channel_explicit" -eq 1 ] && [ "$version_explicit" -eq 1 ]; then
   echo "--channel and --version are mutually exclusive" >&2
+  exit 2
+fi
+if [ "$CHECK_ONLY" -eq 1 ] && [ "$version_explicit" -eq 1 ]; then
+  echo "--check requires a channel, not an exact version" >&2
   exit 2
 fi
 case "$AOS_CHANNEL" in
@@ -783,11 +790,11 @@ fi
 
 # The signed runtime tuple is the authority for GNU runtime membership. Keep
 # the historical 0.10.4 four-binary set stable, and require the FUSE provider
-# for the versioned 2026.9.0–2026.9.2 runtime contract. Darwin's FSKit member is
+# for the versioned 2026.9.0–2026.9.4 runtime contract. Darwin's FSKit member is
 # selected above and remains independent of this Linux-only rule.
 if [ "$os" = Linux ]; then
   case "$runtime_version" in
-    2026.9.0|2026.9.1|2026.9.2) runtime_binaries="$runtime_binaries astrid-storage-provider-fuse" ;;
+    2026.9.0|2026.9.1|2026.9.2|2026.9.3|2026.9.4) runtime_binaries="$runtime_binaries astrid-storage-provider-fuse" ;;
   esac
 fi
 
@@ -830,6 +837,24 @@ if [ -f "$work/channel.toml" ]; then
       }
     done
   fi
+fi
+
+if [ "$CHECK_ONLY" -eq 1 ]; then
+  validate_accepted_channel
+  installed_version=${AOS_INSTALLED_VERSION:-}
+  if [ -z "$installed_version" ]; then
+    [ -x "$AOS_BIN_DIR/aos" ] || { echo "no installed AOS to compare" >&2; exit 1; }
+    installed_version=$("$AOS_BIN_DIR/aos" --version | awk '{print $NF}')
+  fi
+  is_aos_release_version "$installed_version" || { echo "invalid installed AOS version" >&2; exit 1; }
+  if [ "$installed_version" != "$AOS_VERSION" ]; then
+    # shellcheck disable=SC2016 # Backticks are literal command formatting.
+    printf 'Update available: AOS %s -> %s (%s). Run `aos update --channel %s`.\n' \
+      "$installed_version" "$AOS_VERSION" "$AOS_CHANNEL" "$AOS_CHANNEL"
+  else
+    printf 'AOS %s matches the signed %s channel.\n' "$installed_version" "$AOS_CHANNEL"
+  fi
+  exit 0
 fi
 
 echo "Downloading Unicity AOS $AOS_VERSION for $target..."
@@ -879,6 +904,30 @@ bundle="$work/unpack/$bundle_name"
 for file in bin/aos libexec/install.sh release-manifest.json Distro.toml capsule-assets.txt; do
   [ -f "$bundle/$file" ] || { echo "release archive is missing $file" >&2; exit 1; }
 done
+
+# An installer may authenticate a newer release, but it must not interpret that
+# release's layout. Hand control to the authenticated installer shipped inside
+# the selected archive whenever it differs from this one. The successor repeats
+# all signature and digest checks before committing, so this remains fail-closed
+# while ensuring every release installs its own schema.
+if [ ! -f "$0" ] || [ -L "$0" ] || ! cmp -s "$bundle/libexec/install.sh" "$0"; then
+  echo "Handing installation to the authenticated Unicity AOS $AOS_VERSION updater..."
+  set --
+  if [ "$version_explicit" -eq 1 ]; then
+    set -- "$@" --version "$AOS_VERSION"
+  else
+    set -- "$@" --channel "$AOS_CHANNEL"
+  fi
+  if [ "$ASSUME_YES" -eq 1 ]; then
+    set -- "$@" --yes
+  fi
+  if [ "$SKIP_MIGRATION_PROMPT" -eq 1 ]; then
+    set -- "$@" --no-migrate-prompt
+  fi
+  sh "$bundle/libexec/install.sh" "$@"
+  exit $?
+fi
+
 for name in $runtime_binaries; do
   file="runtime/bin/$name"
   [ -f "$bundle/$file" ] || { echo "release archive is missing $file" >&2; exit 1; }
@@ -972,7 +1021,18 @@ release_inventory_entry() {
         sub(/[^0-9].*/, "", field)
         mode = field
       }
-      print "found|" digest "|" mode "|"
+      sha256 = ""
+      field = record
+      if (field ~ /"sha256"[[:space:]]*:/) {
+        sha256 = "invalid"
+        if (field ~ /"sha256"[[:space:]]*:[[:space:]]*"/) {
+          sub(/.*"sha256"[[:space:]]*:[[:space:]]*"/, "", field)
+          sub(/".*/, "", field)
+          sha256 = field
+          if (sha256 == "") sha256 = "invalid"
+        }
+      }
+      print "found|" digest "|" mode "|" sha256
     }
   ' "$manifest"
 }
@@ -987,6 +1047,10 @@ release_inventory_digest() {
 
 release_inventory_mode() {
   printf '%s' "$1" | awk -F '|' '{print $3}'
+}
+
+release_inventory_sha256() {
+  printf '%s' "$1" | awk -F '|' '{print $4}'
 }
 
 distro_toml_inventory=$(release_inventory_entry "$bundle/release-manifest.json" Distro.toml)
@@ -1012,10 +1076,6 @@ if [ "$distro_archive_signed" -eq 1 ]; then
       exit 1
     }
   done
-  command -v b3sum >/dev/null 2>&1 || {
-    echo "b3sum is required to verify signed Distro member inventory" >&2
-    exit 1
-  }
   for distro_member in Distro.toml Distro.lock Distro.sig; do
     case "$distro_member" in
       Distro.toml) distro_inventory="$distro_toml_inventory" ;;
@@ -1032,7 +1092,24 @@ if [ "$distro_archive_signed" -eq 1 ]; then
       echo "signed release inventory has an invalid $distro_member mode" >&2
       exit 1
     }
-    actual_distro_digest=$(b3sum -- "$bundle/$distro_member" | awk '{print $1}')
+    # Current signed inventories carry SHA-256 as well as BLAKE3. Use the
+    # verifier already required for the outer archive on minimal Unix hosts.
+    # Older BLAKE3-only inventories still require their original verifier.
+    distro_sha256=$(release_inventory_sha256 "$distro_inventory")
+    if [ -n "$distro_sha256" ]; then
+      printf '%s\n' "$distro_sha256" | grep -Eq '^[0-9a-f]{64}$' || {
+        echo "signed release inventory has a malformed $distro_member SHA-256" >&2
+        exit 1
+      }
+      distro_digest=$distro_sha256
+      actual_distro_digest=$(sha256_file "$bundle/$distro_member")
+    else
+      command -v b3sum >/dev/null 2>&1 || {
+        echo "b3sum is required for this legacy BLAKE3-only Distro inventory" >&2
+        exit 1
+      }
+      actual_distro_digest=$(b3sum -- "$bundle/$distro_member" | awk '{print $1}')
+    fi
     [ "$actual_distro_digest" = "$distro_digest" ] || {
       echo "signed release inventory digest mismatch: $distro_member" >&2
       exit 1
@@ -1264,6 +1341,13 @@ if [ -d "$bundle/runtime/bin/AstridFS.app" ]; then
   cp -Rp "$bundle/runtime/bin/AstridFS.app" "$release_stage/runtime/bin/"
   cp -Rp "$bundle/runtime/bin/macos" "$release_stage/runtime/bin/"
 fi
+if [ -d "$bundle/share/AOS Command Center.app" ]; then
+  mkdir "$release_stage/share"
+  chmod 700 "$release_stage/share"
+  # The authenticated archive owns these signed bytes. Do not edit Info.plist
+  # or re-sign while installing the product. Do not copy to /Applications.
+  cp -Rp "$bundle/share/AOS Command Center.app" "$release_stage/share/"
+fi
 install -m 0600 "$bundle/release-manifest.json" "$release_stage/release-manifest.json"
 install -m 0600 "$bundle/Distro.toml" "$release_stage/Distro.toml"
 if [ "$distro_archive_signed" -eq 1 ]; then
@@ -1296,19 +1380,198 @@ if [ -d "$AOS_HOME/runtime/bin" ] && [ ! -L "$AOS_HOME/runtime/bin" ]; then
     }
     rm -f "$legacy"
   done
+  # A never-initialized malformed update leaves this directory empty. An
+  # initialized pre-volume workspace also stores content-addressed capsule WASM
+  # members here; preserve those for Astrid's authenticated legacy importer.
+  # `rmdir` deliberately removes only the empty case and never user data.
+  rmdir "$AOS_HOME/runtime/bin" 2>/dev/null || :
 fi
 installation_started=0
 rm -rf "$release_backup"
 release_install_lock
 
+# Optional Finder/FSKit mounts follow AstridFS.app LSMinimumSystemVersion
+# (currently 26.0). Unknown host or bundle versions keep the existing
+# install+enable fail-closed path so fixtures and current Macs still
+# exercise the manager. Older hosts keep the runtime and do not launch
+# an application Launch Services would reject.
+darwin_product_version() {
+  if [ "${AOS_TEST_MACOS_VERSION+set}" = set ]; then
+    [ -n "${AOS_TEST_FIXTURE:-}" ] || {
+      echo "AOS_TEST_MACOS_VERSION is restricted to installer fixtures" >&2
+      exit 1
+    }
+    printf '%s\n' "$AOS_TEST_MACOS_VERSION"
+    return 0
+  fi
+  if [ -x /usr/bin/sw_vers ]; then
+    /usr/bin/sw_vers -productVersion
+  fi
+}
+
+darwin_version_parts() {
+  version=$1
+  printf '%s\n' "$version" | grep -Eq '^[0-9]+([.][0-9]+){0,3}$' || return 1
+  darwin_ver_major=${version%%.*}
+  if [ "$darwin_ver_major" = "$version" ]; then
+    printf '%s 0 0\n' "$darwin_ver_major"
+    return 0
+  fi
+  darwin_ver_rest=${version#*.}
+  darwin_ver_minor=${darwin_ver_rest%%.*}
+  if [ "$darwin_ver_minor" = "$darwin_ver_rest" ]; then
+    printf '%s %s 0\n' "$darwin_ver_major" "$darwin_ver_minor"
+    return 0
+  fi
+  darwin_ver_patch=${darwin_ver_rest#*.}
+  darwin_ver_patch=${darwin_ver_patch%%.*}
+  printf '%s %s %s\n' "$darwin_ver_major" "$darwin_ver_minor" "$darwin_ver_patch"
+}
+
+darwin_version_lt() {
+  darwin_lt_left=$(darwin_version_parts "$1") || return 1
+  darwin_lt_right=$(darwin_version_parts "$2") || return 1
+  darwin_lt_a1=${darwin_lt_left%% *}
+  darwin_lt_tmp=${darwin_lt_left#* }
+  darwin_lt_a2=${darwin_lt_tmp%% *}
+  darwin_lt_a3=${darwin_lt_tmp#* }
+  darwin_lt_b1=${darwin_lt_right%% *}
+  darwin_lt_tmp=${darwin_lt_right#* }
+  darwin_lt_b2=${darwin_lt_tmp%% *}
+  darwin_lt_b3=${darwin_lt_tmp#* }
+  [ "$darwin_lt_a1" -lt "$darwin_lt_b1" ] && return 0
+  [ "$darwin_lt_a1" -gt "$darwin_lt_b1" ] && return 1
+  [ "$darwin_lt_a2" -lt "$darwin_lt_b2" ] && return 0
+  [ "$darwin_lt_a2" -gt "$darwin_lt_b2" ] && return 1
+  [ "$darwin_lt_a3" -lt "$darwin_lt_b3" ]
+}
+
+darwin_xml_minimum() {
+  # Next-line <string> after LSMinimumSystemVersion. XML plists only; used
+  # when /usr/bin/plutil is absent so Linux installer fixtures can still
+  # prove the skip path. Binary plists stay fail-closed.
+  awk '
+    found {
+      if (match($0, /<string>[^<]*<\/string>/)) {
+        print substr($0, RSTART + 8, RLENGTH - 17)
+      }
+      exit
+    }
+    index($0, "<key>LSMinimumSystemVersion</key>") { found = 1 }
+  ' "$1"
+}
+
+darwin_bundle_minimum() {
+  darwin_bundle_plist="$1/Contents/Info.plist"
+  [ -f "$darwin_bundle_plist" ] && [ ! -L "$darwin_bundle_plist" ] || return 1
+  darwin_bundle_min=
+  if [ -x /usr/bin/plutil ]; then
+    darwin_bundle_min=$(/usr/bin/plutil -extract LSMinimumSystemVersion raw -o - "$darwin_bundle_plist" 2>/dev/null) || darwin_bundle_min=
+  fi
+  if [ -z "$darwin_bundle_min" ]; then
+    darwin_bundle_min=$(darwin_xml_minimum "$darwin_bundle_plist") || darwin_bundle_min=
+  fi
+  [ -n "$darwin_bundle_min" ] || return 1
+  printf '%s\n' "$darwin_bundle_min"
+}
+
 if [ -d "$release_dir/runtime/bin/AstridFS.app" ]; then
   filesystem_manager="$release_dir/runtime/bin/macos/aos-filesystem.sh"
-  if ! /bin/sh "$filesystem_manager" install || ! /bin/sh "$filesystem_manager" enable; then
+  skip_fskit=0
+  reported_macos=
+  bundle_min=
+  if [ "$os" = Darwin ]; then
+    reported_macos=$(darwin_product_version) || reported_macos=
+    bundle_min=$(darwin_bundle_minimum "$release_dir/runtime/bin/AstridFS.app") || bundle_min=
+    if [ -n "$reported_macos" ] && [ -n "$bundle_min" ]; then
+      if darwin_version_lt "$reported_macos" "$bundle_min"; then
+        skip_fskit=1
+      fi
+    fi
+  fi
+  if [ "$skip_fskit" -eq 1 ]; then
+    echo "AOS is installed. Finder volume mounting needs macOS ${bundle_min} and an approved Astrid filesystem extension." >&2
+    echo "This Mac reports macOS $reported_macos, which is older than AstridFS.app LSMinimumSystemVersion ${bundle_min}." >&2
+    echo "The CLI and runtime do not require that mount. The extension cannot be registered or approved on this macOS version." >&2
+    echo "After upgrading to macOS ${bundle_min} or later, run:" >&2
+    echo "/bin/sh '$filesystem_manager' install" >&2
+    echo "/bin/sh '$filesystem_manager' enable" >&2
+  elif ! /bin/sh "$filesystem_manager" install || ! /bin/sh "$filesystem_manager" enable; then
     echo "AOS runtime is installed; macOS filesystem setup is incomplete." >&2
     echo "Allow the Astrid filesystem extension in macOS settings, then run:" >&2
     echo "/bin/sh '$filesystem_manager' install" >&2
     echo "/bin/sh '$filesystem_manager' enable" >&2
     exit 1
+  fi
+fi
+
+# Optional menu-bar Command Center follows its own bundle minimum
+# (currently 13.0). Copy/open on an older host is skipped so a 13.0 app
+# cannot fail the CLI/runtime install. Unknown host or bundle versions
+# keep the previous copy/open path. Supported-host copy/mv failures stay
+# fatal; a failed `open` still warns and continues.
+if [ "$os" = Darwin ] && [ -d "$release_dir/share/AOS Command Center.app" ]; then
+  skip_command_center=0
+  reported_macos=$(darwin_product_version) || reported_macos=
+  command_center_min=$(darwin_bundle_minimum "$release_dir/share/AOS Command Center.app") || command_center_min=
+  if [ -n "$reported_macos" ] && [ -n "$command_center_min" ]; then
+    if darwin_version_lt "$reported_macos" "$command_center_min"; then
+      skip_command_center=1
+    fi
+  fi
+  if [ "$skip_command_center" -eq 1 ]; then
+    echo "AOS is installed. Command Center needs macOS ${command_center_min}." >&2
+    echo "This Mac reports macOS $reported_macos, which is older than AOS Command Center.app LSMinimumSystemVersion ${command_center_min}." >&2
+    echo "The CLI and runtime do not require the menu-bar app. It remains in this release and can be copied after upgrading." >&2
+  else
+    command_center_parent="$HOME/Applications"
+    command_center="$command_center_parent/AOS Command Center.app"
+    command_center_stage="$command_center_parent/.AOS Command Center.app.new.$$"
+    command_center_backup="$command_center_parent/.AOS Command Center.app.rollback.$$"
+    [ ! -L "$command_center_parent" ] || {
+      echo "AOS runtime is installed; refusing symlinked Applications directory: $command_center_parent" >&2
+      exit 1
+    }
+    mkdir -p "$command_center_parent"
+    [ -d "$command_center_parent" ] || {
+      echo "AOS runtime is installed; Applications path is not a directory: $command_center_parent" >&2
+      exit 1
+    }
+    if [ -e "$command_center" ] || [ -L "$command_center" ]; then
+      [ -d "$command_center" ] && [ ! -L "$command_center" ] || {
+        echo "AOS runtime is installed; refusing non-directory Command Center: $command_center" >&2
+        exit 1
+      }
+      existing_id=$(/usr/bin/plutil -extract CFBundleIdentifier raw -o - \
+        "$command_center/Contents/Info.plist" 2>/dev/null || :)
+      [ "$existing_id" = ai.unicity.aos.tray ] || {
+        echo "AOS runtime is installed; refusing to replace another application at $command_center" >&2
+        exit 1
+      }
+    fi
+    rm -rf "$command_center_stage" "$command_center_backup"
+    cp -Rp "$release_dir/share/AOS Command Center.app" "$command_center_stage"
+    if [ -d "$command_center" ]; then
+      mv "$command_center" "$command_center_backup"
+    fi
+    if ! mv "$command_center_stage" "$command_center"; then
+      [ ! -d "$command_center_backup" ] || mv "$command_center_backup" "$command_center"
+      echo "AOS runtime is installed; failed to install Command Center" >&2
+      exit 1
+    fi
+    rm -rf "$command_center_backup"
+
+    command_center_open=/usr/bin/open
+    if [ -n "${AOS_TEST_OPEN:-}" ]; then
+      [ -n "${AOS_TEST_FIXTURE:-}" ] || {
+        echo "AOS_TEST_OPEN is restricted to installer fixtures" >&2
+        exit 1
+      }
+      command_center_open=$AOS_TEST_OPEN
+    fi
+    if ! "$command_center_open" -g "$command_center"; then
+      echo "AOS is installed, but Command Center did not open. Open it from $command_center" >&2
+    fi
   fi
 fi
 
