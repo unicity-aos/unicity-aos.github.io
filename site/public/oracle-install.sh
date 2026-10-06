@@ -5,6 +5,7 @@ umask 077
 
 ORACLES_REPO="${AOS_ORACLES_REPO:-unicity-aos/oracles}"
 ORACLES_VERSION="${AOS_ORACLES_VERSION:-latest}"
+ORACLE_CHANNEL=""
 AOS_INSTALL_URL="${AOS_INSTALL_URL:-https://aos.unicity.ai/base-install.sh}"
 AOS_HOME_DIR="${AOS_HOME:-$HOME/.aos}"
 AOS_CHANNEL=""
@@ -15,7 +16,10 @@ ALL_HOSTS=0
 NO_INSTALL_AOS=0
 SKIP_HOST_PLUGIN=0
 PLUGINS_ONLY=0
+CHECK_ONLY=0
+JSON_OUTPUT=0
 RESULT_FILE=
+PROTECTED_ASSETS=
 REQUESTED_HOSTS=""
 LOCAL_ASSETS="${AOS_ORACLE_ASSETS:-}"
 WORK=""
@@ -205,16 +209,22 @@ usage() {
   cat <<'EOF'
 Usage: install.sh [options]
 
+  --check          verify release metadata without installing or starting AOS
+  --json           emit structured metadata (requires --check)
+
   --host HOST       install claude, codex, or grok (repeatable)
   --all             install every supported host
   --yes, -y         non-interactive host-pack provisioning
-  --oracle-version V exact signed oracle pack version (default: latest published)
+  --oracle-version V exact signed oracle pack version (default: latest stable; latest RC with --oracle-channel dev)
+  --oracle-channel C select stable or dev Oracle releases independently of AOS installation
   --aos-channel C   install/follow the AOS stable, dev, or nightly channel
   --aos-version V   install an exact AOS calendar-semver release
   --local-assets D  use locally built capsules and pack manifests for testing
   --aos-installer S use an alternate AOS installer URL or local path for testing
   --plugins-only    install selected host marketplace plugins; provision on host start
   --result-file F   write successful provisioned host/principal pairs as JSON (new file)
+  --protected-assets D
+                     export verified protected-hook helpers to a new directory
   --no-install-aos  fail instead of invoking the canonical AOS installer
   --skip-host-plugin
                      provision capsules/receipt without reinstalling the active host plugin
@@ -240,6 +250,14 @@ while [ "$#" -gt 0 ]; do
       ORACLES_VERSION="${1:-}"
       [ -n "$ORACLES_VERSION" ] || die "--oracle-version requires a version"
       ;;
+    --oracle-channel)
+      shift
+      ORACLE_CHANNEL=${1:-}
+      case "$ORACLE_CHANNEL" in
+        stable|dev) ;;
+        *) die "--oracle-channel requires stable or dev" ;;
+      esac
+      ;;
     --aos-channel)
       shift
       AOS_CHANNEL="${1:-}"
@@ -258,10 +276,17 @@ while [ "$#" -gt 0 ]; do
       [ -n "$AOS_INSTALL_URL" ] || die "--aos-installer requires a URL or local path"
       ;;
     --plugins-only) PLUGINS_ONLY=1 ;;
+    --check) CHECK_ONLY=1 ;;
+    --json) JSON_OUTPUT=1 ;;
     --result-file)
       shift
       RESULT_FILE=${1:-}
       [ -n "$RESULT_FILE" ] || die "--result-file requires a path"
+      ;;
+    --protected-assets)
+      shift
+      PROTECTED_ASSETS=${1:-}
+      [ -n "$PROTECTED_ASSETS" ] || die "--protected-assets requires a directory"
       ;;
     --no-install-aos) NO_INSTALL_AOS=1 ;;
     --skip-host-plugin) SKIP_HOST_PLUGIN=1 ;;
@@ -274,6 +299,16 @@ while [ "$#" -gt 0 ]; do
   shift
 done
 
+if [ "$JSON_OUTPUT" -eq 1 ]; then
+  [ "$CHECK_ONLY" -eq 1 ] || die "--json requires --check"
+  exec 3>&1 1>&2
+fi
+if [ "$CHECK_ONLY" -eq 1 ] && [ -n "$LOCAL_ASSETS" ]; then
+  die "update discovery requires signed release metadata, not local assets"
+fi
+if [ "$CHECK_ONLY" -eq 1 ] && { [ -n "$RESULT_FILE" ] || [ -n "$PROTECTED_ASSETS" ]; }; then
+  die "--check cannot provision results or export protected deployment assets"
+fi
 case "$AOS_HOME_DIR" in /*) ;; *) die "AOS_HOME must be an absolute path" ;; esac
 if [ -n "${AOS_BIN_DIR:-}" ]; then
   case "$AOS_BIN_DIR" in /*) ;; *) die "AOS_BIN_DIR must be an absolute path" ;; esac
@@ -284,13 +319,44 @@ if [ -n "$RESULT_FILE" ]; then
   [ ! -e "$RESULT_FILE" ] && [ ! -L "$RESULT_FILE" ] \
     || die "--result-file must name a new file"
 fi
+if [ -n "$PROTECTED_ASSETS" ]; then
+  case "$PROTECTED_ASSETS" in /*) ;; *) die "--protected-assets requires an absolute path" ;; esac
+  [ ! -e "$PROTECTED_ASSETS" ] && [ ! -L "$PROTECTED_ASSETS" ] \
+    || die "--protected-assets must name a new directory"
+  [ -z "$LOCAL_ASSETS" ] || die "protected deployment assets require a signed release"
+fi
 
 printf '%s\n' "$ORACLES_REPO" | grep -Eq '^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*$' \
   || die "invalid Oracle repository '$ORACLES_REPO'"
 if [ -z "$LOCAL_ASSETS" ]; then
   have curl || die "curl is required to download Oracle releases"
 fi
-if [ "$ORACLES_VERSION" = latest ]; then
+if [ -z "$ORACLE_CHANNEL" ]; then
+  if [ "$AOS_CHANNEL" = dev ]; then ORACLE_CHANNEL=dev; else ORACLE_CHANNEL=stable; fi
+fi
+if [ "$ORACLES_VERSION" = latest ] && [ "$ORACLE_CHANNEL" = dev ]; then
+  [ -z "$LOCAL_ASSETS" ] || die "local assets require an explicit --oracle-version"
+  # Discovery is untrusted; every selected artifact is verified against its
+  # exact tag identity below. The Atom feed avoids the public API rate limit.
+  have python3 || die "python3 is required to select the dev Oracle candidate"
+  candidate_feed=$(curl --proto '=https' --tlsv1.2 -fsSL --max-time 30 \
+    "https://github.com/$ORACLES_REPO/releases.atom") \
+    || die "could not discover dev Oracle candidates"
+  ORACLES_VERSION=$(printf '%s' "$candidate_feed" | python3 -c '
+import re, sys, xml.etree.ElementTree as ET
+root = ET.fromstring(sys.stdin.read())
+prefix = "https://github.com/" + sys.argv[1] + "/releases/tag/v"
+for entry in root.findall("{http://www.w3.org/2005/Atom}entry"):
+    for link in entry.findall("{http://www.w3.org/2005/Atom}link"):
+        url = link.get("href", "")
+        if url.startswith(prefix):
+            version = url[len(prefix):]
+            if re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-rc\.[1-9][0-9]*", version):
+                print(version)
+                sys.exit(0)
+raise SystemExit("no published numbered Oracle RC in the release feed")
+' "$ORACLES_REPO") || die "could not select a published dev Oracle candidate"
+elif [ "$ORACLES_VERSION" = latest ]; then
   [ -z "$LOCAL_ASSETS" ] || die "local assets require an explicit --oracle-version"
   # Resolve once without the rate-limited GitHub API, then verify all artifacts
   # against that exact release tag's Sigstore identity below.
@@ -304,7 +370,7 @@ if [ "$ORACLES_VERSION" = latest ]; then
     *) die "latest Oracle release redirected outside the expected repository" ;;
   esac
 fi
-printf '%s\n' "$ORACLES_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' \
+printf '%s\n' "$ORACLES_VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$' \
   || die "invalid oracle version '$ORACLES_VERSION'"
 [ -z "$AOS_CHANNEL" ] || [ -z "$AOS_VERSION" ] \
   || die "--aos-channel and --aos-version are mutually exclusive"
@@ -314,7 +380,7 @@ case "$AOS_CHANNEL" in
 esac
 if [ -n "$AOS_VERSION" ]; then
   printf '%s\n' "$AOS_VERSION" \
-    | grep -Eq '^(202[6-9]|20[3-9][0-9])\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' \
+    | grep -Eq '^(202[6-9]|20[3-9][0-9])\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$' \
     || die "invalid AOS version '$AOS_VERSION'"
 fi
 if [ -n "$LOCAL_ASSETS" ]; then
@@ -541,11 +607,14 @@ calendar_version_at_least() {
   actual=$1
   floor=$2
   awk -v actual="$actual" -v floor="$floor" 'BEGIN {
+    prerelease = (actual ~ /-rc\./)
+    sub(/-rc\.[0-9]+$/, "", actual)
     split(actual, a, ".")
     split(floor, f, ".")
     ok = (a[1] > f[1]) ||
          (a[1] == f[1] && a[2] > f[2]) ||
-         (a[1] == f[1] && a[2] == f[2] && a[3] >= f[3])
+         (a[1] == f[1] && a[2] == f[2] && a[3] > f[3]) ||
+         (a[1] == f[1] && a[2] == f[2] && a[3] == f[3] && !prerelease)
     exit !ok
   }'
 }
@@ -1302,7 +1371,53 @@ stage_release_metadata() {
   verify_blake3 "$RELEASE_STAGE/runtime-compatibility.toml" runtime-compatibility.toml
   validate_runtime_compatibility_document "$RELEASE_STAGE/runtime-compatibility.toml"
   PLUGIN_BLAKE3=$(expected_blake3 aos-oracle-plugins.tar.gz)
+  if [ -n "${AOS_EXPECTED_PLUGIN_BLAKE3:-}" ]; then
+    [ "$PLUGIN_BLAKE3" = "$AOS_EXPECTED_PLUGIN_BLAKE3" ] \
+      || die "Oracle plugin artifact changed since discovery; check again"
+  fi
   validate_plugin_archive "$RELEASE_STAGE/aos-oracle-plugins.tar.gz"
+}
+
+export_protected_assets() {
+  [ -n "$PROTECTED_ASSETS" ] || return 0
+  # Read the just-verified archive, not an installed user-writable snapshot or
+  # receipt. The privileged caller must still bind copied bytes to these hashes.
+  python3 - "$RELEASE_STAGE/aos-oracle-plugins.tar.gz" "$PROTECTED_ASSETS" \
+    "$ORACLES_REPO" "$ORACLES_VERSION" <<'PY'
+import hashlib, json, os, pathlib, shutil, sys, tarfile
+archive, destination, repository, version = sys.argv[1:]
+names = ("aos-protected-hook", "aos-native-hook", "aos-protected-settings", "aos-protected-deploy")
+selected = {}
+with tarfile.open(archive, "r:gz") as bundle:
+    for name in names:
+        path = "plugins/claude/bin/" + name
+        matches = [member for member in bundle.getmembers() if member.name == path]
+        if len(matches) != 1 or not matches[0].isfile() or not 0 < matches[0].size <= 1024 * 1024:
+            raise ValueError("release lacks an unambiguous protected helper: " + name)
+        with bundle.extractfile(matches[0]) as source:
+            selected[name] = source.read(1024 * 1024 + 1)
+manifest = {"schema": "aos-oracle-protected-assets.v1", "repository": repository,
+            "version": version, "source": "signed-release", "assets": {
+                name: hashlib.sha256(data).hexdigest() for name, data in selected.items()}}
+# mkdir fails on an existing entry, including symlinks. Cleanup owns only the
+# new export directory; never replace or delete a caller's existing directory.
+os.mkdir(destination, 0o700)
+try:
+    for name, data in selected.items():
+        with open(pathlib.Path(destination) / name, "xb") as output:
+            output.write(data)
+            output.flush()
+            os.fsync(output.fileno())
+        os.chmod(pathlib.Path(destination) / name, 0o500)
+    with open(pathlib.Path(destination) / "manifest.json", "x") as output:
+        json.dump(manifest, output, sort_keys=True)
+        output.write("\n")
+        output.flush()
+        os.fsync(output.fileno())
+except BaseException:
+    shutil.rmtree(destination)
+    raise
+PY
 }
 
 prepare_plugin_snapshot() {
@@ -1409,7 +1524,7 @@ validate_pack() {
     || die "signed pack has invalid AOS version floor '$aos_floor'"
   installed_aos=$(aos --version | awk 'NF { value = $NF } END { print value }')
   printf '%s\n' "$installed_aos" \
-    | grep -Eq '^20[0-9][0-9]\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' \
+    | grep -Eq '^20[0-9][0-9]\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$' \
     || die "could not determine the installed Unicity AOS version"
   calendar_version_at_least "$installed_aos" "$aos_floor" \
     || die "Unicity AOS $installed_aos does not satisfy pack requirement >=$aos_floor"
@@ -1825,6 +1940,28 @@ install_plugin() {
       grok plugin install "$plugin_root/plugins/grok" --trust >/dev/null
       ;;
   esac
+  # Host registration and pack provisioning are different transitions. In
+  # plugins-only mode the pack is deliberately provisioned on the next launch.
+  # Record registration only after the host command succeeds, without claiming
+  # that an already-running host has loaded the new plugin.
+  registration_root="$AOS_HOME_DIR/extensions/oracles/$host"
+  ensure_contained_directory "$registration_root" "plugin registration root"
+  registration="$registration_root/PluginRegistration.toml"
+  [ ! -L "$registration" ] || die "plugin registration is a symlink"
+  [ ! -e "$registration" ] || [ -f "$registration" ] || die "plugin registration is not regular"
+  registration_stage=$(mktemp "$registration_root/.registration.XXXXXX")
+  {
+    printf 'schema-version = 1\n'
+    printf 'oracle-version = "%s"\n' "$ORACLES_VERSION"
+    printf 'host = "%s"\n' "$host"
+    printf 'source = "%s"\n' "$ASSET_SOURCE"
+    printf 'plugin-snapshot = "../../../plugins/%s"\n' "$ORACLES_VERSION"
+    printf 'plugin-blake3 = "%s"\n' "$PLUGIN_BLAKE3"
+  } > "$registration_stage"
+  chmod 600 "$registration_stage"
+  ensure_contained_directory "$registration_root" "plugin registration root"
+  mv -f "$registration_stage" "$registration"
+  mark_host_committed "$host"
   say "✓ $host marketplace plugin installed"
 }
 
@@ -1893,6 +2030,26 @@ write_receipt() {
   NEW_RECEIPT=""
 }
 
+if [ "$CHECK_ONLY" -eq 1 ]; then
+  WORK=${WORK:-$(mktemp -d 2>/dev/null || mktemp -d -t aos-oracles)}
+  RELEASE_STAGE="$WORK/release"
+  mkdir "$RELEASE_STAGE"
+  ensure_cosign
+  download_verified BLAKE3SUMS.txt "$RELEASE_STAGE/BLAKE3SUMS.txt"
+  download_verified runtime-compatibility.toml "$RELEASE_STAGE/runtime-compatibility.toml"
+  validate_checksum_manifest "$RELEASE_STAGE/BLAKE3SUMS.txt"
+  validate_runtime_compatibility_document "$RELEASE_STAGE/runtime-compatibility.toml"
+  PLUGIN_BLAKE3=$(expected_blake3 aos-oracle-plugins.tar.gz) \
+    || die "signed release has no plugin archive"
+  if [ "$JSON_OUTPUT" -eq 1 ]; then
+    printf '{"schema_version":1,"kind":"oracle","version":"%s","plugin_blake3":"%s","verification":"metadata"}\n' \
+      "$ORACLES_VERSION" "$PLUGIN_BLAKE3" >&3
+  else
+    printf 'Oracle %s signed release metadata verified; no installation performed.\n' "$ORACLES_VERSION"
+  fi
+  exit 0
+fi
+
 ensure_b3sum
 hosts=$(select_hosts)
 if [ -e "$AOS_HOME_DIR" ]; then
@@ -1902,6 +2059,7 @@ INSTALL_TRANSACTION_ACTIVE=1
 ensure_install_destinations "$hosts"
 acquire_install_lock
 stage_release_metadata
+export_protected_assets
 ensure_aos
 if [ "$PLUGINS_ONLY" -eq 1 ]; then
   prepare_plugin_snapshot

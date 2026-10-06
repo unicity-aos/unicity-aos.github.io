@@ -68,7 +68,7 @@ HOME="$home" AOS_HOME="$home/.aos" TEST_LOG="$log" TEST_ASSETS="$assets" \
     --oracle-assets "$assets" \
     --all --channel dev >/dev/null
 grep -Fq 'base <--no-migrate-prompt> <--channel> <dev>' "$log"
-grep -Fq 'oracle <--plugins-only> <--no-install-aos> <--yes>' "$log"
+grep -Fq 'oracle <--plugins-only> <--no-install-aos> <--oracle-channel> <dev> <--yes>' "$log"
 if grep -Fq -- '<--all>' "$log"; then
   echo "public --all bypassed detected-host selection" >&2
   exit 1
@@ -89,12 +89,19 @@ output=$(HOME="$home" AOS_HOME="$home/.aos" TEST_LOG="$log" \
     --base-installer "$work/base-install.sh" \
     --oracle-installer "$work/oracle-default-probe.sh" \
     --host codex --yes)
-if ! grep -Fq 'default: latest published' <<<"$output"; then
+if ! grep -Fq 'default: latest stable; latest RC with --oracle-channel dev' <<<"$output"; then
   echo "public wrapper selected a stale Oracle installer default" >&2
   exit 1
 fi
 
 echo "public installer composes base and host plugins with the released Oracle default"
+
+# Exact RC selection reaches the real wrapper's base-installer boundary.
+HOME="$home" AOS_HOME="$home/.aos" TEST_LOG="$log" TEST_ASSETS="$assets" \
+  "$root/public/install.sh" --base-installer "$work/base-install.sh" \
+    --oracle-installer "$work/oracle-install.sh" --oracle-assets "$assets" \
+    --version 2026.10.0-rc.1 --host codex --yes >/dev/null
+grep -Fq 'base <--no-migrate-prompt> <--yes> <--version> <2026.10.0-rc.1>' "$log"
 
 # Invalid handoff destinations must fail before the base installer runs.
 printf 'preserve-existing-result\n' > "$work/existing-result.json"
