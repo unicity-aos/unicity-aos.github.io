@@ -314,7 +314,7 @@ case "$AOS_CHANNEL" in
 esac
 if [ -n "$AOS_VERSION" ]; then
   printf '%s\n' "$AOS_VERSION" \
-    | grep -Eq '^(202[6-9]|20[3-9][0-9])\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' \
+    | grep -Eq '^(202[6-9]|20[3-9][0-9])\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$' \
     || die "invalid AOS version '$AOS_VERSION'"
 fi
 if [ -n "$LOCAL_ASSETS" ]; then
