@@ -72,8 +72,8 @@ while [ "$#" -gt 0 ]; do
       shift
       AOS_VERSION="${1:-}"
       printf '%s\n' "$AOS_VERSION" \
-        | grep -Eq '^(202[6-9]|20[3-9][0-9])\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' \
-        || die "--version requires YYYY.MINOR.PATCH"
+        | grep -Eq '^(202[6-9]|20[3-9][0-9])\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-rc\.[1-9][0-9]*)?$' \
+        || die "--version requires YYYY.MINOR.PATCH or YYYY.MINOR.PATCH-rc.N"
       ;;
     --base-installer)
       shift
@@ -158,6 +158,9 @@ export PATH
 set -- "$oracle_installer"
 [ "$PROVISION_ORACLES" -ne 0 ] || set -- "$@" --plugins-only
 set -- "$@" --no-install-aos
+case "$AOS_CHANNEL:$AOS_VERSION" in
+  dev:*|*:*-rc.*) set -- "$@" --oracle-channel dev ;;
+esac
 [ -z "$ORACLE_RESULT" ] || set -- "$@" --result-file "$ORACLE_RESULT"
 for host in $HOSTS; do
   set -- "$@" --host "$host"
