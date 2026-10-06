@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the served installer resolver without installing into a real home."""
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -30,3 +31,25 @@ for url, args, error, network in cases:
         assert (root / "called").exists() == network
         assert not (root / "home").exists()
 print("6 served Oracle resolver cases passed")
+
+# Execute the served installer's real metadata classifier. An update banner is
+# not a transport failure, but unrelated errors must remain fatal.
+source = installer.read_text()
+function = re.search(r'(?ms)^load_capsule_record\(\) \{.*?^\}', source).group()
+for status, diagnostic, expected in (
+    (1, "capsule 'aos-skills' is not installed for agent 'codex-code'", 1),
+    (2, "transport unavailable", 97),
+    (1, "transport unavailable", 97),
+):
+    with tempfile.TemporaryDirectory() as raw:
+        env = dict(os.environ, WORK=raw, PROBE_STATUS=str(status), PROBE_DIAGNOSTIC=diagnostic)
+        program = '''
+die() { printf '%s\\n' "$*" >&2; exit 97; }
+aos() {
+  printf '%s\\n' '! Update available: v2026.10.0-rc.2 → v2026.9.4. Run `astrid update` to upgrade.' "$PROBE_DIAGNOSTIC" >&2
+  return "$PROBE_STATUS"
+}
+''' + function + '\nload_capsule_record codex-code aos-skills\n'
+        result = subprocess.run(['sh', '-c', program], env=env, capture_output=True, text=True, timeout=5)
+        assert result.returncode == expected, result
+print("3 served RC capsule metadata classification cases passed")
