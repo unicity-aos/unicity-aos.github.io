@@ -8,8 +8,8 @@ permissions:
   contents: read
 
 env:
-  AOS_INSTALLER_SOURCE_COMMIT: 869000bbd9263bc285ae09d94d3797339216ba34
-  ORACLE_INSTALLER_SOURCE_COMMIT: e1a931544b459fb6ef3c42a9b56c658bdfb3b0fe
+  AOS_INSTALLER_SOURCE_COMMIT: 4e2394f6262f233d5fbc95e8b241eb62a8387e50
+  ORACLE_INSTALLER_SOURCE_COMMIT: 143e155c50c26c9ddabc6cfa15c1ee3d080cb69f
 
 concurrency:
   group: website-ci-${{ github.event.pull_request.number }}
