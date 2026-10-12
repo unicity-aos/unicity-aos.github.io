@@ -437,7 +437,21 @@ ensure_b3sum() {
 }
 
 blake3_file() {
-  "$B3SUM" "$1" | awk '{print $1}'
+  if [ -n "$B3SUM" ]; then
+    bf_digest=$("$B3SUM" "$1") || return 1
+    bf_digest=$(printf '%s\n' "$bf_digest" | awk '{print $1}')
+  else
+    # AOS owns the authenticated bundled implementation. No daemon or global
+    # package installation is needed; older AOS without it fails explicitly.
+    bf_digest=$(aos checksum "$1") \
+      || die "installed AOS cannot compute capsule identities; update AOS or provide b3sum"
+  fi
+  [ "${#bf_digest}" -eq 64 ] \
+    || die "BLAKE3 verifier returned an invalid digest"
+  case "$bf_digest" in
+    *[!0-9a-f]*) die "BLAKE3 verifier returned an invalid digest" ;;
+  esac
+  printf '%s\n' "$bf_digest"
 }
 
 release_capsule_wasm_blake3() {
@@ -445,7 +459,6 @@ release_capsule_wasm_blake3() {
   rcw_name=$2
   rcw_member=$(printf '%s\n' "$rcw_name" | tr '-' '_')
   rcw_output="$WORK/release-$rcw_name.wasm"
-  [ -n "$B3SUM" ] || die "b3sum is required to authenticate AOS capsule '$rcw_name'"
   tar -xOf "$rcw_archive" "$rcw_member.wasm" >"$rcw_output" \
     || die "AOS capsule '$rcw_name' has no readable WASM member"
   blake3_file "$rcw_output"
@@ -1265,11 +1278,45 @@ ensure_cosign() {
     linux-amd64) digest=ae1ecd212663f3693ad9edf8b1a183900c9a52d3155ba6e354237f9a0f6463fc ;;
   esac
   COSIGN="$WORK/cosign"
-  curl -fsSL --max-time 120 \
-    "https://github.com/sigstore/cosign/releases/download/$COSIGN_VERSION/cosign-$target" \
-    -o "$COSIGN" || die "could not download the Sigstore verifier"
+  [ ! -L "$COSIGN" ] || die "Sigstore verifier path is a symlink"
+  if [ -f "$COSIGN" ] && [ "$(sha256_file "$COSIGN")" = "$digest" ]; then
+    chmod 700 "$COSIGN"
+    return
+  fi
+  cache_root="$AOS_HOME_DIR/cache/verifiers"
+  for cache_parent in "$AOS_HOME_DIR" "$AOS_HOME_DIR/cache" "$cache_root"; do
+    if [ -L "$cache_parent" ] || { [ -e "$cache_parent" ] && [ ! -d "$cache_parent" ]; }; then
+      die "unsafe Sigstore verifier cache directory: $cache_parent"
+    fi
+  done
+  cache_file="$cache_root/$digest"
+  if [ -L "$cache_file" ] || { [ -e "$cache_file" ] && [ ! -f "$cache_file" ]; }; then
+    die "cached Sigstore verifier is not a regular file"
+  fi
+  if [ -f "$cache_file" ] && [ "$(sha256_file "$cache_file")" = "$digest" ]; then
+    say "Reusing the checksum-verified Sigstore verifier."
+    cp "$cache_file" "$COSIGN"
+  else
+    # Bound stalled transfers separately from a healthy download on a slow link.
+    say "Downloading the pinned Sigstore verifier (approximately 140 MB)..."
+    curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fSL \
+      --connect-timeout 15 --speed-limit 1024 --speed-time 60 --max-time 1800 \
+      "https://github.com/sigstore/cosign/releases/download/$COSIGN_VERSION/cosign-$target" \
+      -o "$COSIGN" || die "could not download the Sigstore verifier"
+  fi
   [ "$(sha256_file "$COSIGN")" = "$digest" ] || die "Sigstore verifier checksum mismatch"
   chmod 700 "$COSIGN"
+  # Read-only release discovery must not create an application home/cache.
+  if [ "$CHECK_ONLY" -eq 0 ] && [ -d "$AOS_HOME_DIR" ]; then
+    mkdir -p "$cache_root"
+    chmod 700 "$AOS_HOME_DIR/cache" "$cache_root"
+    cache_stage=$(mktemp "$cache_root/.cosign.XXXXXX") || die "could not stage verifier cache"
+    if ! cp "$COSIGN" "$cache_stage" || ! chmod 700 "$cache_stage" ||
+        [ "$(sha256_file "$cache_stage")" != "$digest" ] || ! mv -f "$cache_stage" "$cache_file"; then
+      rm -f "$cache_stage"
+      die "could not retain the verified Sigstore verifier"
+    fi
+  fi
 }
 
 verify_release_asset() {
@@ -1802,6 +1849,42 @@ reconcile_managed_aos_capsules() {
   done < "$RESOLVED_AOS_IDENTITIES"
 }
 
+bind_native_hook_adapter() {
+  nh_principal=$1
+  # Older signed packs do not declare the native hook adapter at all.
+  nh_declared=0
+  grep -q '^aos-hook-adapter-oracle ' "$RESOLVED_AOS_IDENTITIES" || nh_declared=$?
+  case "$nh_declared" in
+    0) ;;
+    1) return 0 ;;
+    *) die "could not read resolved Oracle hook adapter identities" ;;
+  esac
+  nh_hash=$(binding_hash "$RESOLVED_AOS_IDENTITIES" aos-hook-adapter-oracle) \
+    || die "signed operator distribution has no Oracle hook adapter identity"
+  # Registry identity, not an installer-derived UUID, authorizes policy replies.
+  # A newly granted principal can still be warming when installation reaches here.
+  nh_attempt=0
+  while :; do
+    load_capsule_record "$nh_principal" aos-hook-adapter-oracle \
+      || die "Oracle hook adapter has no readable identity for $nh_principal"
+    [ "$CAPSULE_HASH" = "$nh_hash" ] \
+      || die "Oracle hook adapter differs from the signed operator distribution"
+    if printf '%s\n' "$CAPSULE_SOURCE" \
+      | grep -Eq '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    then
+      break
+    fi
+    [ "$CAPSULE_SOURCE" = unloaded ] \
+      || die "Oracle hook adapter has an invalid registry source for $nh_principal"
+    nh_attempt=$((nh_attempt + 1))
+    [ "$nh_attempt" -lt 10 ] \
+      || die "Oracle hook adapter did not load for $nh_principal; retry installation"
+    sleep 1
+  done
+  aos --principal default capsule config aos-mcp --agent "$nh_principal" \
+    --set "AOS_ORACLE_ADAPTER_SOURCE_ID=$CAPSULE_SOURCE" >/dev/null
+}
+
 install_pack() {
   host=$1
   principal=$(principal_for "$host")
@@ -1867,6 +1950,8 @@ install_pack() {
       && [ "$CAPSULE_HASH" = "$expected_hash" ] \
       || die "AOS capsule grant '$capsule' for $principal differs from the signed operator distribution"
   done < "$RESOLVED_AOS_IDENTITIES"
+
+  bind_native_hook_adapter "$principal"
 
   while read -r previous_name previous_hash previous_extra; do
     [ -n "$previous_name" ] || continue
