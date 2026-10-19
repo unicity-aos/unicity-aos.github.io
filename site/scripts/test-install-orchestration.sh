@@ -51,6 +51,44 @@ if grep -Fq 'aos init' <<<"$output"; then
 fi
 test ! -e "$home/.astrid"
 
+# A clean host with no coding-agent CLI is still a usable standalone AOS
+# installation. Oracle must not turn that completed base install into failure.
+mkdir -p "$work/no-host-bin"
+for tool in sh mktemp mkfifo cp chmod sed rm grep mkdir; do
+  ln -s "$(command -v "$tool")" "$work/no-host-bin/$tool"
+done
+cat > "$work/oracle-no-host-failure.sh" <<'EOF'
+#!/bin/sh
+printf 'oracle-should-not-run\n' >> "$TEST_LOG"
+exit 94
+EOF
+chmod 755 "$work/oracle-no-host-failure.sh"
+: > "$log"
+output=$(HOME="$home" AOS_HOME="$home/.aos" TEST_LOG="$log" \
+  PATH="$work/no-host-bin" /bin/sh "$root/public/install.sh" \
+    --base-installer "$work/base-install.sh" \
+    --oracle-installer "$work/oracle-no-host-failure.sh" --yes)
+grep -Fq 'base <--no-migrate-prompt> <--yes>' "$log"
+if grep -Fq 'oracle-should-not-run' "$log"; then
+  echo "public installer invoked Oracle without a supported host" >&2
+  exit 1
+fi
+grep -Fq 'No supported coding-agent host was detected.' <<<"$output"
+grep -Fq 'Run: aos init' <<<"$output"
+grep -Fq 'rerun this installer to add its plugin.' <<<"$output"
+
+# An explicit provisioning request still reaches Oracle and reports its failure.
+: > "$log"
+if HOME="$home" AOS_HOME="$home/.aos" TEST_LOG="$log" \
+  PATH="$work/no-host-bin" /bin/sh "$root/public/install.sh" \
+    --base-installer "$work/base-install.sh" \
+    --oracle-installer "$work/oracle-no-host-failure.sh" \
+    --provision-oracles --yes >"$work/no-host-provision.log" 2>&1; then
+  echo "public installer ignored explicit Oracle provisioning on a hostless machine" >&2
+  exit 1
+fi
+grep -Fq 'oracle-should-not-run' "$log"
+
 # Eager provisioning delegates the same selected hosts to Oracle's full path.
 HOME="$home" AOS_HOME="$home/.aos" TEST_LOG="$log" TEST_ASSETS="$assets" \
   "$root/public/install.sh" \

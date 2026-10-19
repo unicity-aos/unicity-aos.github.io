@@ -139,7 +139,6 @@ oracle_installer="$WORK/oracle-install.sh"
 base_output="$WORK/base-output"
 
 fetch_installer "$BASE_INSTALLER_SOURCE" "$base_installer"
-fetch_installer "$ORACLE_INSTALLER_SOURCE" "$oracle_installer"
 
 set -- "$base_installer" --no-migrate-prompt
 [ "$ASSUME_YES" -eq 0 ] || set -- "$@" --yes
@@ -154,6 +153,20 @@ wait "$filter_pid"
 [ "$status" -eq 0 ] || exit "$status"
 PATH="${AOS_BIN_DIR:-${AOS_HOME:-$HOME/.aos}/bin}:$PATH"
 export PATH
+
+# Coding-agent plugins are optional for a standalone AOS installation. Keep
+# explicit host and eager-provisioning requests on the Oracle error path.
+if [ -z "$HOSTS" ] && [ "$ALL_HOSTS" -eq 0 ] && [ "$PROVISION_ORACLES" -eq 0 ] \
+  && ! command -v claude >/dev/null 2>&1 \
+  && ! command -v codex >/dev/null 2>&1 \
+  && ! command -v grok >/dev/null 2>&1; then
+  say "Unicity AOS is installed. No supported coding-agent host was detected."
+  say "Run: aos init"
+  say "Install Claude Code, Codex, or Grok, then rerun this installer to add its plugin."
+  exit 0
+fi
+
+fetch_installer "$ORACLE_INSTALLER_SOURCE" "$oracle_installer"
 
 set -- "$oracle_installer"
 [ "$PROVISION_ORACLES" -ne 0 ] || set -- "$@" --plugins-only
